@@ -1,0 +1,94 @@
+package server
+
+import (
+	"github.com/awd-platform/awd-arena/internal/handler"
+	"github.com/awd-platform/awd-arena/internal/middleware"
+	"github.com/awd-platform/awd-arena/internal/model"
+	"github.com/gofiber/fiber/v3"
+)
+
+// RegisterRoutes sets up all HTTP routes.
+func RegisterRoutes(app *fiber.App) {
+	// API v1
+	v1 := app.Group("/api/v1")
+
+	// Auth (login has rate limiting to prevent brute force)
+	auth := v1.Group("/auth")
+	auth.Post("/login", middleware.LoginRateLimit(), handler.AuthHandler.Login)
+	auth.Post("/logout", handler.AuthHandler.Logout)
+	auth.Get("/me", handler.AuthHandler.Me)
+
+	// Admin routes - User management
+	admin := v1.Group("/admin", middleware.JWTAuth(), middleware.RequireRole(model.RoleAdmin))
+	admin.Get("/users", handler.UserHandler.List)
+	admin.Post("/users", handler.UserHandler.Create)
+	admin.Get("/users/:id", handler.UserHandler.GetUser)
+	admin.Put("/users/:id", handler.UserHandler.Update)
+	admin.Delete("/users/:id", handler.UserHandler.Delete)
+
+	// Security admin routes (view WAF rules, attack logs)
+	security := v1.Group("/security", middleware.JWTAuth(), middleware.RequirePermission(model.PermViewAllData))
+	security.Get("/waf/rules", handler.GetWAFRules)
+	security.Get("/attacks", handler.GetGameAttacks)
+
+	// Teams - All authenticated users can list teams
+	teams := v1.Group("/teams", middleware.JWTAuth())
+	teams.Get("/", middleware.RequirePermission(model.PermViewRankings), handler.TeamHandler.List)
+	teams.Post("/", middleware.RequirePermission(model.PermManageTeams), handler.TeamHandler.Create)
+	teams.Get("/:id", middleware.RequirePermission(model.PermViewRankings), handler.TeamHandler.Get)
+	teams.Get("/:id/members", middleware.RequirePermission(model.PermViewRankings), handler.TeamHandler.Members)
+
+	// Games - Players can view, Organizers can manage
+	games := v1.Group("/games", middleware.JWTAuth())
+	games.Get("/", middleware.RequirePermission(model.PermViewGame), handler.GameHandler.List)
+	games.Post("/", middleware.RequirePermission(model.PermCreateGame), handler.GameHandler.Create)
+	games.Get("/:id", middleware.RequirePermission(model.PermViewGame), handler.GameHandler.Get)
+	games.Put("/:id", middleware.RequirePermission(model.PermEditGame), handler.GameHandler.Update)
+	games.Post("/:id/start", middleware.RequirePermission(model.PermStartGame), handler.GameHandler.Start)
+	games.Post("/:id/pause", middleware.RequirePermission(model.PermPauseGame), handler.GameHandler.Pause)
+	games.Post("/:id/resume", middleware.RequirePermission(model.PermPauseGame), handler.GameHandler.Resume)
+	games.Post("/:id/stop", middleware.RequirePermission(model.PermStopGame), handler.GameHandler.Stop)
+	games.Post("/:id/reset", middleware.RequirePermission(model.PermManageGames), handler.GameHandler.Reset)
+
+	// Challenges - Players can view, Organizers can manage
+	games.Get("/:id/challenges", middleware.RequirePermission(model.PermViewGame), handler.ChallengeHandler.List)
+	games.Post("/:id/challenges", middleware.RequirePermission(model.PermCreateChallenge), handler.ChallengeHandler.Create)
+
+	// Security: alerts & attacks per game
+	games.Get("/:id/alerts", middleware.RequirePermission(model.PermViewGameStats), handler.GetGameAlerts)
+	games.Get("/:id/attacks", middleware.RequirePermission(model.PermViewGameStats), handler.GetGameAttacks)
+
+	// Containers - Admin and Organizers can view/restart
+	games.Get("/:id/containers", middleware.RequirePermission(model.PermViewGameStats), handler.ContainerHandler.List)
+	games.Post("/:id/containers/restart", middleware.RequirePermission(model.PermManageInfrastructure), handler.ContainerHandler.BulkRestart)
+	games.Post("/:id/containers/:cid/restart", middleware.RequirePermission(model.PermManageInfrastructure), handler.ContainerHandler.Restart)
+	games.Get("/:id/containers/stats", middleware.RequirePermission(model.PermViewGameStats), handler.ContainerHandler.Stats)
+
+	// Flags - Players can submit flags
+	flags := v1.Group("/games/:id/flags", middleware.JWTAuth())
+	flags.Post("/submit", middleware.FlagSubmitRateLimit(100, 60), middleware.RequirePermission(model.PermSubmitFlag), handler.FlagHandler.Submit)
+	flags.Get("/history", middleware.RequirePermission(model.PermViewOwnStats), handler.FlagHandler.History)
+
+	// Rankings - All authenticated users can view
+	v1.Get("/games/:id/rankings", middleware.JWTAuth(), middleware.RequirePermission(model.PermViewRankings), handler.RankingHandler.Get)
+	v1.Get("/games/:id/rankings/rounds/:round", middleware.JWTAuth(), middleware.RequirePermission(model.PermViewRankings), handler.RankingHandler.GetRound)
+
+	// WebSocket (token validated via query param in ws.go)
+	app.Get("/ws", HandleWebSocket)
+
+	// Docker Images (admin only)
+	dockerImages := v1.Group("/docker-images", middleware.JWTAuth(), middleware.RequireRole(model.RoleAdmin))
+	dockerImages.Get("/", handler.DockerImageHandlerObj.List)
+	dockerImages.Get("/host/list", handler.DockerImageHandlerObj.HostList)
+	dockerImages.Get("/:id", handler.DockerImageHandlerObj.Get)
+	dockerImages.Post("/", handler.DockerImageHandlerObj.Create)
+	dockerImages.Put("/:id", handler.DockerImageHandlerObj.Update)
+	dockerImages.Delete("/:id", handler.DockerImageHandlerObj.Delete)
+	dockerImages.Post("/:id/pull", handler.DockerImageHandlerObj.Pull)
+
+	// Health
+	app.Get("/health", func(c fiber.Ctx) error {
+		return c.JSON(fiber.Map{"status": "ok"})
+	})
+}
+

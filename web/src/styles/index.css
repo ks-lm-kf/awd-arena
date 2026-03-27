@@ -1,0 +1,189 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #6366f1;
+  --color-primary-light: #818cf8;
+  --color-primary-dark: #4f46e5;
+  --color-surface: #111827;
+  --color-surface-light: #1f2937;
+  --color-surface-lighter: #374151;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Ant Design dark overrides */
+.ant-btn-primary {
+  background: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+/* Mobile Responsive Styles */
+
+/* Mobile menu button */
+.mobile-menu-button {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.mobile-menu-button:hover {
+  background: #374151 !important;
+}
+
+/* Mobile sidebar drawer */
+.mobile-sidebar-drawer .ant-drawer-body {
+  background: #111827 !important;
+}
+
+/* Mobile overlay */
+.mobile-sidebar-drawer .ant-drawer-mask {
+  background: rgba(0, 0, 0, 0.65) !important;
+}
+
+/* Mobile sidebar menu */
+.mobile-sidebar-drawer .ant-menu {
+  border: none !important;
+}
+
+.mobile-sidebar-drawer .ant-menu-item {
+  margin: 4px 8px !important;
+  border-radius: 6px;
+}
+
+/* Mobile table optimization - Card layout */
+@media (max-width: 768px) {
+  /* Convert tables to card layout */
+  .ant-table-wrapper {
+    overflow-x: auto;
+  }
+  
+  .ant-table {
+    min-width: 600px;
+  }
+  
+  /* Alternative: Stack table cells vertically on mobile */
+  .ant-table-tbody > tr > td {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+  }
+  
+  /* Reduce padding on mobile */
+  .ant-table-cell {
+    padding: 12px 8px !important;
+  }
+  
+  /* Smaller buttons on mobile */
+  .ant-btn {
+    padding: 4px 12px;
+    font-size: 14px;
+  }
+  
+  /* Adjust card padding */
+  .ant-card-body {
+    padding: 12px;
+  }
+  
+  /* Stack form items on mobile */
+  .ant-form-item {
+    margin-bottom: 16px;
+  }
+  
+  /* Smaller headings on mobile */
+  .ant-typography h1 {
+    font-size: 24px !important;
+  }
+  
+  .ant-typography h2 {
+    font-size: 20px !important;
+  }
+  
+  .ant-typography h3 {
+    font-size: 16px !important;
+  }
+}
+
+/* Mobile card-style table (optional class to apply) */
+.mobile-card-table {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-card-table {
+    display: block;
+  }
+  
+  .mobile-card-table .mobile-card {
+    background: #1f2937;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+    border: 1px solid #2a2a4a;
+  }
+  
+  .mobile-card-table .mobile-card-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #2a2a4a;
+  }
+  
+  .mobile-card-table .mobile-card-row:last-child {
+    border-bottom: none;
+  }
+  
+  .mobile-card-table .mobile-card-label {
+    color: #9ca3af;
+    font-size: 12px;
+    flex-shrink: 0;
+    margin-right: 12px;
+  }
+  
+  .mobile-card-table .mobile-card-value {
+    color: #fff;
+    font-size: 14px;
+    text-align: right;
+    word-break: break-word;
+  }
+}
+
+/* Smooth transitions */
+.sidebar-transition {
+  transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+}
+
+/* Hide desktop table on mobile if using card layout */
+@media (max-width: 768px) {
+  .hide-on-mobile {
+    display: none !important;
+  }
+}
+
+/* Show mobile-only elements */
+.mobile-only {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-only {
+    display: block;
+  }
+}
+
+/* Desktop-only elements */
+@media (min-width: 769px) {
+  .desktop-only {
+    display: block;
+  }
+  
+  .mobile-only {
+    display: none !important;
+  }
+}

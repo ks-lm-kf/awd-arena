@@ -1,0 +1,159 @@
+package engine
+
+import (
+	"context"
+	"sync"
+	"time"
+
+	"github.com/awd-platform/awd-arena/internal/database"
+	"github.com/awd-platform/awd-arena/internal/model"
+	"github.com/awd-platform/awd-arena/internal/service"
+	"github.com/awd-platform/awd-arena/pkg/logger"
+)
+
+// CompetitionEngine is the main competition engine.
+type CompetitionEngine struct {
+	mu             sync.Mutex
+	game           *model.Game
+	roundDuration  time.Duration
+	breakDuration  time.Duration
+	totalRounds    int
+	currentRound   int
+	currentPhase   string
+	flagSvc        *service.FlagService
+	gameSvc        *service.GameService
+	scorer         *ScoreCalculator
+	roundScheduler *RoundScheduler
+	cancelFunc     context.CancelFunc
+	running        bool
+}
+
+// NewCompetitionEngine creates a new engine instance.
+func NewCompetitionEngine(game *model.Game) *CompetitionEngine {
+	return &CompetitionEngine{
+		game:          game,
+		flagSvc:       &service.FlagService{},
+		gameSvc:       &service.GameService{},
+		scorer:        NewScoreCalculator(game),
+		roundDuration: time.Duration(game.RoundDuration) * time.Second,
+		breakDuration: time.Duration(game.BreakDuration) * time.Second,
+		totalRounds:   game.TotalRounds,
+		currentPhase:  "preparation",
+	}
+}
+
+func (e *CompetitionEngine) Start(ctx context.Context) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.running {
+		return nil
+	}
+	ctx, e.cancelFunc = context.WithCancel(ctx)
+	e.running = true
+
+	// Generate flags for round 1 immediately
+	if err := e.onRoundStart(ctx, 1); err != nil {
+		logger.Error("initial round start error", "error", err)
+	}
+
+	e.roundScheduler = NewRoundScheduler(e)
+	go e.roundScheduler.Run(ctx)
+	logger.Info("competition engine started", "game", e.game.Title)
+	return nil
+}
+
+func (e *CompetitionEngine) Pause() error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if !e.running {
+		return nil
+	}
+	if e.cancelFunc != nil {
+		e.cancelFunc()
+	}
+	e.running = false
+	e.currentPhase = "break"
+	logger.Info("competition engine paused", "round", e.currentRound)
+	return nil
+}
+
+func (e *CompetitionEngine) Resume(ctx context.Context) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.running {
+		return nil
+	}
+	ctx, e.cancelFunc = context.WithCancel(ctx)
+	e.running = true
+
+	// If we haven't started any round yet, trigger round 1
+	if e.currentRound == 0 {
+		if err := e.onRoundStart(ctx, 1); err != nil {
+			logger.Error("round start error on resume", "error", err)
+		}
+	}
+
+	e.roundScheduler = NewRoundScheduler(e)
+	go e.roundScheduler.Run(ctx)
+	logger.Info("competition engine resumed", "round", e.currentRound)
+	return nil
+}
+
+func (e *CompetitionEngine) Stop(ctx context.Context) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.cancelFunc != nil {
+		e.cancelFunc()
+	}
+	e.running = false
+	e.currentPhase = "finished"
+
+	// Update game in DB
+	db := database.GetDB()
+	if db != nil {
+		db.Model(&model.Game{}).Where("id = ?", e.game.ID).Updates(map[string]interface{}{
+			"status":        "finished",
+			"current_phase": "finished",
+		})
+	}
+
+	logger.Info("competition engine stopped", "round", e.currentRound)
+	return nil
+}
+
+func (e *CompetitionEngine) GetCurrentRound() int  { return e.currentRound }
+func (e *CompetitionEngine) GetCurrentPhase() string { return e.currentPhase }
+func (e *CompetitionEngine) GetGame() *model.Game  { return e.game }
+func (e *CompetitionEngine) IsRunning() bool        { return e.running }
+
+func (e *CompetitionEngine) onRoundStart(ctx context.Context, round int) error {
+	e.currentRound = round
+	e.currentPhase = "running"
+
+	// Update game current_round in DB
+	db := database.GetDB()
+	if db != nil {
+		db.Model(&model.Game{}).Where("id = ?", e.game.ID).Updates(map[string]interface{}{
+			"current_round":  round,
+			"current_phase": "running",
+		})
+	}
+
+	return e.flagSvc.GenerateFlags(ctx, e.game.ID, round)
+}
+
+func (e *CompetitionEngine) onRoundEnd(ctx context.Context, round int) error {
+	e.currentPhase = "scoring"
+	return e.scorer.CalculateRoundScores(ctx, round)
+}
+
+
+// SetCancelFunc sets the cancel function for the engine.
+func (e *CompetitionEngine) SetCancelFunc(cancel context.CancelFunc) {
+e.cancelFunc = cancel
+}
+
+// GetRoundCallbacks returns the round start and end callbacks for RoundManager
+func (e *CompetitionEngine) GetRoundCallbacks() (func(ctx context.Context, round int) error, func(ctx context.Context, round int) error) {
+	return e.onRoundStart, e.onRoundEnd
+

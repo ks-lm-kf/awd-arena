@@ -1,0 +1,150 @@
+# ==================== Go ====================
+# Binary outputs / 二进制产物
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+awd-arena
+awd-arena.exe
+awd-cli
+awd-cli.exe
+awd-migrator
+awd-migrator.exe
+
+# Build directories / 构建目录
+/build/
+/dist/
+
+# Test binary / 测试二进制
+*.test
+*.out
+
+# Coverage / 覆盖率
+*.prof
+*.pprof
+coverage.html
+coverage.out
+
+# Vendor (if not committed) / Vendor 目录
+/vendor/
+
+# Go workspace / Go 工作区
+go.work
+go.work.sum
+
+# ==================== Frontend / Node.js ====================
+# Dependencies / 依赖
+web/node_modules/
+node_modules/
+
+# Build output / 构建产物
+web/dist/
+dist/
+
+# Logs / 日志
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment / 环境变量
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Editor directories and files / 编辑器目录
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ==================== Database / 数据库 ====================
+# SQLite database files / SQLite 数据库文件
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# ==================== IDE & Tools ====================
+# JetBrains / JetBrains IDE
+.idea/
+*.iml
+
+# VS Code / VS Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# ==================== OS Files / 系统文件 ====================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# ==================== Secrets & Config ====================
+# Never commit secrets / 禁止提交密钥
+*.pem
+*.key
+*.cert
+*.crt
+*.p12
+*.pfx
+
+# Sensitive config / 敏感配置
+configs/config.prod.yaml
+configs/config.local.yaml
+
+# ==================== Docker ====================
+# Docker volumes (local) / Docker 数据卷
+docker-data/
+redis-data/
+nats-data/
+
+# ==================== Misc / 其他 ====================
+# Temporary files / 临时文件
+tmp/
+temp/
+
+# Archive files / 压缩包
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# PCAP files / 流量抓包
+*.pcap
+*.pcapng
+
+# ==================== Project Specific ====================
+# Binary directory
+bin/
+
+# Log files
+log/
+
+# Backup files
+*.bak
+*.backup
+*.old
+

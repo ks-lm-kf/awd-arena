@@ -1,0 +1,31 @@
+server:
+  host: 0.0.0.0
+  port: 8080
+  jwt_secret: "dev-secret-change-me"
+
+database:
+  sqlite_path: "data/awd.db"
+
+nats:
+  url: "nats://localhost:4222"
+
+docker:
+  host: "npipe:////./pipe/docker_engine"
+
+security:
+  jwt_expire_hours: 168
+  rate_limit: 1000
+  flag_submit_limit: 1000
+  blocklist_enabled: false
+
+game:
+  default_round_duration: 5m
+  default_break_duration: 2m
+  max_containers_per_team: 5
+
+ai:
+  enabled: false
+  rule_engine_path: "./rules/"
+  onnx_model_path: "./models/"
+
+log_level: "debug"

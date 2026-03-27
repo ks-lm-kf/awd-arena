@@ -1,0 +1,356 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"sync"
+
+	"github.com/awd-platform/awd-arena/internal/container"
+	"github.com/awd-platform/awd-arena/internal/database"
+	"github.com/awd-platform/awd-arena/internal/model"
+	"github.com/awd-platform/awd-arena/internal/network"
+	"github.com/awd-platform/awd-arena/pkg/logger"
+)
+
+var (
+	globalOnce   sync.Once
+	globalMgr    *container.ContainerManager
+	globalNetMgr *network.NetworkManager
+	initErr      error
+)
+
+// initContainerManager initializes the global Docker client, container manager, and network manager.
+func initContainerManager() {
+	dockerClient, err := container.NewDockerClientImpl()
+	if err != nil {
+		initErr = err
+		return
+	}
+	store := container.NewGormContainerStore()
+	globalMgr = container.NewContainerManager(dockerClient, store)
+	globalNetMgr = network.NewNetworkManager(dockerClient)
+}
+
+// getManager returns the global ContainerManager.
+func getManager() (*container.ContainerManager, error) {
+	globalOnce.Do(initContainerManager)
+	if initErr != nil {
+		return nil, initErr
+	}
+	if globalMgr == nil {
+		return nil, errors.New("container manager not initialized")
+	}
+	return globalMgr, nil
+}
+
+// getNetManager returns the global NetworkManager.
+func getNetManager() (*network.NetworkManager, error) {
+	globalOnce.Do(initContainerManager)
+	if initErr != nil {
+		return nil, initErr
+	}
+	if globalNetMgr == nil {
+		return nil, errors.New("network manager not initialized")
+	}
+	return globalNetMgr, nil
+}
+
+// ContainerService handles container lifecycle management.
+type ContainerService struct{}
+
+// ContainerInfo represents container status info.
+type ContainerInfo struct {
+	ID            int64  `json:"id"`
+	TeamID        int64  `json:"team_id"`
+	TeamName      string `json:"team_name"`
+	ChallengeID   int64  `json:"challenge_id"`
+	ChallengeName string `json:"challenge_name"`
+	ContainerID   string `json:"container_id"`
+	IPAddress     string `json:"ip_address"`
+	PortMapping   string `json:"port_mapping"`
+	Status        string `json:"status"`
+}
+
+// ContainerStatsInfo represents container stats with team/challenge info.
+type ContainerStatsInfo struct {
+	ContainerID string  `json:"container_id"`
+	TeamID      int64   `json:"team_id"`
+	ChallengeID int64   `json:"challenge_id"`
+	IPAddress   string  `json:"ip_address"`
+	Status      string  `json:"status"`
+	CPUPercent  float64 `json:"cpu_percent"`
+	MemoryBytes uint64  `json:"memory_bytes"`
+	NetworkBytes uint64 `json:"network_bytes"`
+}
+
+// NewContainerService creates a new ContainerService instance.
+func NewContainerService() *ContainerService {
+	return &ContainerService{}
+}
+
+// ProvisionContainers creates all containers for a game's teams and challenges.
+// Called when a game starts.
+func (s *ContainerService) ProvisionContainers(ctx context.Context, gameID int64) error {
+	db := database.GetDB()
+	if db == nil {
+		return errors.New("database not initialized")
+	}
+
+	// Get all teams for this game
+	var teams []model.Team
+	if err := db.Find(&teams).Error; err != nil {
+		return err
+	}
+
+	// Get all challenges for this game
+	var challenges []model.Challenge
+	if err := db.Where("game_id = ?", gameID).Find(&challenges).Error; err != nil {
+		return err
+	}
+
+	if len(teams) == 0 || len(challenges) == 0 {
+		logger.Info("no teams or challenges, skipping provisioning", "teams", len(teams), "challenges", len(challenges))
+		return nil
+	}
+
+	mgr, err := getManager()
+	if err != nil {
+		return err
+	}
+
+	netMgr, err := getNetManager()
+	if err != nil {
+		return err
+	}
+
+	// Create networks for each team
+	for _, team := range teams {
+		if _, err := netMgr.CreateTeamNetwork(ctx, team.ID); err != nil {
+			logger.Error("create team network failed", "team", team.ID, "error", err)
+			continue
+		}
+	}
+
+	// Create containers: each team x each challenge
+	hostPortBase := 31000
+	for _, team := range teams {
+		netName, _ := netMgr.GetTeamNetwork(team.ID)
+		chalIdx := 0
+		for _, chal := range challenges {
+			ip := netMgr.GetTeamIP(team.ID, chalIdx)
+			portBase := hostPortBase + (len(challenges)*(int(team.ID)-1)+chalIdx)*10
+
+			tc, err := mgr.CreateChallengeContainer(ctx, team.ID, team.Name, &chal, gameID, netName, ip, portBase)
+			if err != nil {
+				logger.Error("create container failed", "team", team.ID, "challenge", chal.ID, "error", err)
+				continue
+			}
+			logger.Info("container provisioned", "team", team.ID, "challenge", chal.ID, "ip", tc.IPAddress)
+			chalIdx++
+		}
+	}
+
+	// Setup cross-team isolation
+	var teamIDs []int64
+	for _, t := range teams {
+		teamIDs = append(teamIDs, t.ID)
+	}
+	_ = netMgr.IsolateTeams(ctx, teamIDs)
+
+	logger.Info("provisioning complete", "teams", len(teams), "challenges", len(challenges))
+	return nil
+}
+
+// TeardownContainers stops and removes all containers for a game.
+func (s *ContainerService) TeardownContainers(ctx context.Context, gameID int64) error {
+	mgr, err := getManager()
+	if err != nil {
+		return err
+	}
+
+	db := database.GetDB()
+	if db == nil {
+		return errors.New("database not initialized")
+	}
+
+	// Cleanup all containers
+	if err := mgr.CleanupAll(ctx, gameID); err != nil {
+		return err
+	}
+
+	// Get unique team IDs and remove their networks
+	var teamIDs []int64
+	db.Model(&model.TeamContainer{}).Where("game_id = ?", gameID).Distinct("team_id").Pluck("team_id", &teamIDs)
+
+	netMgr, err := getNetManager()
+	if err != nil {
+		return err
+	}
+	for _, tid := range teamIDs {
+		_ = netMgr.RemoveTeamNetwork(ctx, tid)
+	}
+
+	return nil
+}
+
+// PauseContainers pauses all containers for a game.
+func (s *ContainerService) PauseContainers(ctx context.Context, gameID int64) error {
+	mgr, err := getManager()
+	if err != nil {
+		return err
+	}
+	return mgr.PauseAll(ctx, gameID)
+}
+
+// ResumeContainers resumes all paused containers for a game.
+func (s *ContainerService) ResumeContainers(ctx context.Context, gameID int64) error {
+	mgr, err := getManager()
+	if err != nil {
+		return err
+	}
+	return mgr.UnpauseAll(ctx, gameID)
+}
+
+// RestartAll restarts all containers for a game.
+func (s *ContainerService) RestartAll(ctx context.Context, gameID int64) error {
+	mgr, err := getManager()
+	if err != nil {
+		return err
+	}
+	return mgr.BulkRestart(ctx, gameID)
+}
+
+// RestartContainer restarts a specific container.
+func (s *ContainerService) RestartContainer(ctx context.Context, gameID, containerID int64) error {
+	mgr, err := getManager()
+	if err != nil {
+		return err
+	}
+
+	db := database.GetDB()
+	if db == nil {
+		return errors.New("database not initialized")
+	}
+
+	var tc model.TeamContainer
+	if err := db.Where("game_id = ? AND id = ?", gameID, containerID).First(&tc).Error; err != nil {
+		return errors.New("container not found")
+	}
+	return mgr.RestartContainer(ctx, tc.ContainerID)
+}
+
+// GetContainers returns container list for a game with team and challenge names.
+func (s *ContainerService) GetContainers(ctx context.Context, gameID int64) ([]ContainerInfo, error) {
+	db := database.GetDB()
+	if db == nil {
+		return nil, errors.New("database not initialized")
+	}
+
+	var containers []model.TeamContainer
+	if err := db.Where("game_id = ?", gameID).Find(&containers).Error; err != nil {
+		return nil, err
+	}
+
+	// 预加载所有需要的 teams 和 challenges
+	teamIDs := make([]int64, len(containers))
+	challengeIDs := make([]int64, len(containers))
+	for i, c := range containers {
+		teamIDs[i] = c.TeamID
+		challengeIDs[i] = c.ChallengeID
+	}
+
+	// 查询队伍名称
+	var teams []model.Team
+	teamMap := make(map[int64]string)
+	if err := db.Where("id IN ?", teamIDs).Find(&teams).Error; err == nil {
+		for _, t := range teams {
+			teamMap[t.ID] = t.Name
+		}
+	}
+
+	// 查询靶机名称
+	var challenges []model.Challenge
+	challengeMap := make(map[int64]string)
+	if err := db.Where("id IN ?", challengeIDs).Find(&challenges).Error; err == nil {
+		for _, c := range challenges {
+			challengeMap[c.ID] = c.Name
+		}
+	}
+
+	items := make([]ContainerInfo, len(containers))
+	for i, c := range containers {
+		items[i] = ContainerInfo{
+			ID:            c.ID,
+			TeamID:        c.TeamID,
+			TeamName:      teamMap[c.TeamID],
+			ChallengeID:   c.ChallengeID,
+			ChallengeName: challengeMap[c.ChallengeID],
+			ContainerID:   c.ContainerID,
+			IPAddress:     c.IPAddress,
+			PortMapping:   c.PortMapping,
+			Status:        c.Status,
+		}
+	}
+	return items, nil
+}
+
+// GetStats returns container statistics for a game with real Docker stats.
+func (s *ContainerService) GetStats(ctx context.Context, gameID int64) ([]ContainerStatsInfo, error) {
+	db := database.GetDB()
+	if db == nil {
+		return nil, errors.New("database not initialized")
+	}
+
+	var containers []model.TeamContainer
+	if err := db.Where("game_id = ?", gameID).Find(&containers).Error; err != nil {
+		return nil, err
+	}
+
+	mgr, err := getManager()
+	if err != nil {
+		// Return basic info without stats
+		result := make([]ContainerStatsInfo, len(containers))
+		for i, c := range containers {
+			result[i] = ContainerStatsInfo{
+				ContainerID: c.ContainerID,
+				TeamID:      c.TeamID,
+				ChallengeID: c.ChallengeID,
+				IPAddress:   c.IPAddress,
+				Status:      c.Status,
+			}
+		}
+		return result, nil
+	}
+
+	stats, err := mgr.MonitorStats(ctx, gameID)
+	if err != nil {
+		logger.Error("monitor stats failed", "error", err)
+	}
+
+	// Merge stats with container info
+	statsMap := make(map[string]*container.ContainerStats)
+	if stats != nil {
+		for i := range stats {
+			statsMap[stats[i].ID] = &stats[i]
+		}
+	}
+
+	result := make([]ContainerStatsInfo, len(containers))
+	for i, c := range containers {
+		info := ContainerStatsInfo{
+			ContainerID: c.ContainerID,
+			TeamID:      c.TeamID,
+			ChallengeID: c.ChallengeID,
+			IPAddress:   c.IPAddress,
+			Status:      c.Status,
+		}
+		if s, ok := statsMap[c.ContainerID]; ok {
+			info.CPUPercent = s.CPU
+			info.MemoryBytes = s.Memory
+			info.NetworkBytes = s.Network
+		}
+		result[i] = info
+	}
+	return result, nil
+}
+

@@ -1,0 +1,163 @@
+openapi: "3.1.0"
+info:
+  title: AWD Arena Platform API
+  version: "0.1.0"
+  description: AWD (Attack With Defense) cybersecurity competition platform
+
+servers:
+  - url: http://localhost:8080
+    description: Development
+
+paths:
+  /api/v1/health:
+    get:
+      summary: Health check
+      tags: [System]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIResponse"
+
+  /api/v1/auth/login:
+    post:
+      summary: User login
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: Login success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIResponse"
+
+  /api/v1/auth/me:
+    get:
+      summary: Get current user
+      tags: [Auth]
+      security: [{ BearerAuth: [] }]
+      responses:
+        "200":
+          description: User info
+
+  /api/v1/games:
+    get:
+      summary: List games
+      tags: [Games]
+      responses:
+        "200":
+          description: Game list
+    post:
+      summary: Create game
+      tags: [Games]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGameRequest"
+      responses:
+        "201":
+          description: Created
+
+  /api/v1/games/{id}:
+    get:
+      summary: Get game details
+      tags: [Games]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Game details
+
+  /api/v1/games/{id}/start:
+    post:
+      summary: Start game
+      tags: [Games]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Game started
+
+  /api/v1/games/{id}/flags/submit:
+    post:
+      summary: Submit flag
+      tags: [Flags]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [flag_value, target_team]
+              properties:
+                flag_value: { type: string }
+                target_team: { type: integer }
+      responses:
+        "200":
+          description: Submission result
+
+  /api/v1/games/{id}/rankings:
+    get:
+      summary: Get rankings
+      tags: [Rankings]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Rankings
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    APIResponse:
+      type: object
+      properties:
+        code: { type: integer, example: 0 }
+        message: { type: string, example: "ok" }
+        data: {}
+
+    CreateGameRequest:
+      type: object
+      required: [title, mode]
+      properties:
+        title: { type: string }
+        description: { type: string }
+        mode: { type: string, enum: [awd_score, awd_mix, koh] }
+        total_rounds: { type: integer, default: 20 }
+        round_duration: { type: integer, default: 300 }
+        break_duration: { type: integer, default: 120 }
