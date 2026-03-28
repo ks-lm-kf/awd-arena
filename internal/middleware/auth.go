@@ -19,9 +19,23 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
+// getJWTSecret returns the JWT secret from config.
+func getJWTSecret() string {
+	return config.C.Server.JWTSecret
+}
+
+// parseJWTToken parses and validates a JWT token string.
+func parseJWTToken(tokenString, secret string) (*jwt.Token, error) {
+	return jwt.ParseWithClaims(tokenString, &Claims{}, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		return []byte(secret), nil
+	})
+}
+
 // JWTAuth returns a JWT authentication middleware.
 func JWTAuth() fiber.Handler {
-	secret := config.C.Server.JWTSecret
 	return func(c fiber.Ctx) error {
 		authHeader := c.Get("Authorization")
 		if authHeader == "" {
@@ -33,13 +47,10 @@ func JWTAuth() fiber.Handler {
 			tokenString = authHeader[7:]
 		}
 
-		token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(t *jwt.Token) (interface{}, error) {
-			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-			}
-			return []byte(secret), nil
-		})
+		secret := getJWTSecret()
+		token, err := parseJWTToken(tokenString, secret)
 		if err != nil || !token.Valid {
+			logger.Warn("JWT validation failed", "error", err)
 			return c.Status(401).JSON(fiber.Map{"code": 401, "message": "invalid or expired token"})
 		}
 
@@ -48,12 +59,10 @@ func JWTAuth() fiber.Handler {
 			return c.Status(401).JSON(fiber.Map{"code": 401, "message": "invalid token claims"})
 		}
 
-		logger.Info("JWTAuth DEBUG", "user_id", claims.UserID, "username", claims.Username, "role", claims.Role)
 		c.Locals("user_id", claims.UserID)
 		c.Locals("username", claims.Username)
 		c.Locals("role", claims.Role)
 		c.Locals("team_id", claims.TeamID)
-		logger.Info("JWTAuth DEBUG: Locals set, calling next")
 		return c.Next()
 	}
 }
@@ -90,7 +99,7 @@ func GetJWTSecret() string {
 	return config.C.Server.JWTSecret
 }
 
-// ValidateToken parses and validates a JWT token from the request, returns user_id.
+// ValidateToken parses and validates a JWT token from the request.
 func ValidateToken(c fiber.Ctx, secret string) (int64, error) {
 	authHeader := c.Get("Authorization")
 	if authHeader == "" {
@@ -100,12 +109,7 @@ func ValidateToken(c fiber.Ctx, secret string) (int64, error) {
 	if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
 		tokenString = authHeader[7:]
 	}
-	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-		}
-		return []byte(secret), nil
-	})
+	token, err := parseJWTToken(tokenString, secret)
 	if err != nil || !token.Valid {
 		return 0, fmt.Errorf("invalid or expired token")
 	}

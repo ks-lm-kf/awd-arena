@@ -73,12 +73,55 @@ func (sc *ScoreCalculator) CalculateRoundScores(ctx context.Context, round int) 
 				"total_score":   total,
 			})
 		}
-
-		// Update team total score
-		db.Model(&model.Team{}).Where("id = ?", team.ID).Update("score", total)
 	}
 
-	return sc.UpdateRankings(ctx, round)
+	// Update cumulative team scores (sum of all rounds)
+	return sc.UpdateCumulativeTeamScores(ctx)
+}
+
+// UpdateCumulativeTeamScores recalculates each team's total score from all rounds.
+func (sc *ScoreCalculator) UpdateCumulativeTeamScores(ctx context.Context) error {
+	db := database.GetDB()
+	if db == nil {
+		return nil
+	}
+
+	// Sum all round scores per team for this game
+	type TeamTotal struct {
+		TeamID     int64
+		TotalScore float64
+	}
+	var totals []TeamTotal
+	db.Model(&model.RoundScore{}).
+		Select("team_id, SUM(total_score) as total_score").
+		Where("game_id = ?", sc.game.ID).
+		Group("team_id").
+		Find(&totals)
+
+	// Add score adjustments
+	type AdjTotal struct {
+		TeamID     int64
+		AdjTotal   int
+	}
+	var adjTotals []AdjTotal
+	db.Model(&model.ScoreAdjustment{}).
+		Select("team_id, SUM(adjust_value) as adj_total").
+		Where("game_id = ?", sc.game.ID).
+		Group("team_id").
+		Find(&adjTotals)
+
+	adjMap := make(map[int64]int)
+	for _, a := range adjTotals {
+		adjMap[a.TeamID] = a.AdjTotal
+	}
+
+	// Update each team's cumulative score
+	for _, t := range totals {
+		cumulative := t.TotalScore + float64(adjMap[t.TeamID])
+		db.Model(&model.Team{}).Where("id = ?", t.TeamID).Update("score", cumulative)
+	}
+
+	return sc.UpdateRankings(ctx, 0)
 }
 
 func (sc *ScoreCalculator) CalculateTeamScore(teamID int64, round int) (*model.RoundScore, error) {
@@ -110,12 +153,28 @@ func (sc *ScoreCalculator) UpdateRankings(ctx context.Context, round int) error 
 		return nil
 	}
 
-	// Get round scores ordered by total
-	var scores []model.RoundScore
-	db.Where("game_id = ? AND round = ?", sc.game.ID, round).Order("total_score desc").Find(&scores)
-
-	for i, s := range scores {
-		db.Model(&model.RoundScore{}).Where("id = ?", s.ID).Update("rank", i+1)
+	// Get cumulative scores for ranking (all rounds)
+	type TeamTotal struct {
+		TeamID     int64
+		TotalScore float64
 	}
+	var totals []TeamTotal
+	db.Model(&model.RoundScore{}).
+		Select("team_id, SUM(total_score) as total_score").
+		Where("game_id = ?", sc.game.ID).
+		Group("team_id").
+		Order("total_score desc").
+		Find(&totals)
+
+	// Update each team's rank based on cumulative score
+	for i, t := range totals {
+		rank := i + 1
+		// Update the latest round score's rank
+		var latestScore model.RoundScore
+		if err := db.Where("game_id = ? AND team_id = ? AND round = ?", sc.game.ID, t.TeamID, sc.game.CurrentRound).First(&latestScore).Error; err == nil {
+			db.Model(&latestScore).Update("rank", rank)
+		}
+	}
+
 	return nil
 }

@@ -32,6 +32,25 @@ export interface BatchImportTeamsRequest {
 }
 
 export const adminApi = {
+  // List games and teams
+  listGames: () => get<Game[]>('/games/'),
+  listTeams: () => get<Team[]>('/teams/'),
+  listContainers: (gameId: number) => get<any[]>(`/games/${gameId}/containers`),
+  restartContainer: (gameId: number, containerID: string) => post<void>(`/games/${gameId}/containers/${containerID}/restart`),
+  bulkRestartContainers: (gameId: number) => post<void>(`/games/${gameId}/containers/restart`),
+
+  // Game action shortcut
+  gameAction: (id: number, action: string) => {
+    const actionMap: Record<string, string> = {
+      start: `/judge/games/${id}/start`,
+      pause: `/judge/games/${id}/pause`,
+      resume: `/judge/games/${id}/resume`,
+      stop: `/judge/games/${id}/stop`,
+      reset: `/judge/games/${id}/reset`,
+    }
+    return post<void>(actionMap[action], {})
+  },
+
   // Admin logs
   getLogs: (params?: { page?: number; page_size?: number; action?: string; resource_type?: string }) =>
     get<{ items: AdminLog[]; total: number; page: number; page_size: number }>('/judge/logs', params),
