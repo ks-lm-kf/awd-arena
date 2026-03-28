@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/awd-platform/awd-arena/internal/database"
 	"github.com/awd-platform/awd-arena/internal/engine/scoring"
 	"github.com/awd-platform/awd-arena/internal/model"
 	"github.com/awd-platform/awd-arena/internal/repo"
@@ -12,10 +13,10 @@ import (
 
 // ScoringConfig holds configuration for scoring modes.
 type ScoringConfig struct {
-	InitialTotal     float64 // Initial total points pool
-	FlagValue        float64 // Points per flag
-	FirstBloodBonus  float64 // First blood bonus ratio (e.g., 0.1 = 10% bonus)
-	DefenseValue     float64 // Defense points per round
+	InitialTotal    float64 // Initial total points pool
+	FlagValue       float64 // Points per flag
+	FirstBloodBonus float64 // First blood bonus ratio (e.g., 0.1 = 10% bonus)
+	DefenseValue    float64 // Defense points per round
 }
 
 // DefaultScoringConfig returns default scoring configuration.
@@ -23,18 +24,18 @@ func DefaultScoringConfig() *ScoringConfig {
 	return &ScoringConfig{
 		InitialTotal:    10000.0,
 		FlagValue:       100.0,
-		FirstBloodBonus: 0.1, // 10% bonus
+		FirstBloodBonus: 0.1,
 		DefenseValue:    50.0,
 	}
 }
 
 // AWDScoreMode implements classic AWD attack-defense scoring with zero-sum.
 type AWDScoreMode struct {
-	game       *model.Game
-	config     *ScoringConfig
-	scorer     *scoring.ZeroSumScorer
-	scoreRepo  repo.ScoreRepo
-	teamIDs    []int64
+	game      *model.Game
+	config    *ScoringConfig
+	scorer    *scoring.ZeroSumScorer
+	scoreRepo repo.ScoreRepo
+	teamIDs   []int64
 }
 
 // NewAWDScoreMode creates a new AWD score mode with default config.
@@ -47,7 +48,6 @@ func NewAWDScoreModeWithConfig(config *ScoringConfig, scoreRepo repo.ScoreRepo) 
 	if config == nil {
 		config = DefaultScoringConfig()
 	}
-	
 	return &AWDScoreMode{
 		config:    config,
 		scoreRepo: scoreRepo,
@@ -66,15 +66,34 @@ func (m *AWDScoreMode) Start(ctx context.Context, game *model.Game) error {
 		m.scoreRepo,
 	)
 
-	// Get team IDs from game
-	// TODO: Load teams from game.Teams or database
-	// For now, we'll initialize when teams are registered
-	
+	// Load teams from database
+	db := database.GetDB()
+	if db != nil {
+		var gameTeams []model.GameTeam
+		if err := db.Where("game_id = ?", game.ID).Find(&gameTeams).Error; err == nil && len(gameTeams) > 0 {
+			teamIDs := make([]int64, len(gameTeams))
+			for i, gt := range gameTeams {
+				teamIDs[i] = gt.TeamID
+			}
+			m.InitializeTeams(teamIDs)
+		} else {
+			// Fallback: load all teams
+			var teams []model.Team
+			if err := db.Find(&teams).Error; err == nil {
+				teamIDs := make([]int64, len(teams))
+				for i, t := range teams {
+					teamIDs[i] = t.ID
+				}
+				m.InitializeTeams(teamIDs)
+			}
+		}
+	}
+
 	logger.Info("AWD score mode started",
 		"game", game.Title,
 		"initial_total", m.config.InitialTotal,
 		"flag_value", m.config.FlagValue,
-		"first_blood_bonus", m.config.FirstBloodBonus,
+		"teams_loaded", len(m.teamIDs),
 	)
 
 	return nil
@@ -89,10 +108,6 @@ func (m *AWDScoreMode) InitializeTeams(teamIDs []int64) {
 // OnRoundStart handles round start events.
 func (m *AWDScoreMode) OnRoundStart(ctx context.Context, round int) error {
 	logger.Info("AWD round start", "round", round)
-	
-	// Reset round-specific state if needed
-	// First blood detector should track per-flag, so no reset needed
-	
 	return nil
 }
 
@@ -104,10 +119,9 @@ func (m *AWDScoreMode) OnRoundEnd(ctx context.Context, round int) error {
 		return fmt.Errorf("scorer not initialized")
 	}
 
-	// Calculate defense scores for this round
 	totalRounds := m.game.TotalRounds
 	if totalRounds <= 0 {
-		totalRounds = 10 // Default to 10 rounds
+		totalRounds = 10
 	}
 
 	if err := m.scorer.OnDefense(ctx, round, totalRounds); err != nil {
@@ -115,10 +129,8 @@ func (m *AWDScoreMode) OnRoundEnd(ctx context.Context, round int) error {
 		return err
 	}
 
-	// Validate zero-sum invariant
 	if !m.scorer.ValidateZeroSum() {
 		logger.Warn("zero-sum validation failed", "round", round)
-		// Don't return error - just log warning
 	}
 
 	return nil
@@ -126,17 +138,10 @@ func (m *AWDScoreMode) OnRoundEnd(ctx context.Context, round int) error {
 
 // OnAttack processes an attack event.
 func (m *AWDScoreMode) OnAttack(ctx context.Context, attack *model.FlagSubmission) error {
-	logger.Info("AWD attack recorded",
-		"attacker", attack.AttackerTeam,
-		"target", attack.TargetTeam,
-		"correct", attack.IsCorrect,
-	)
-
 	if m.scorer == nil {
 		return fmt.Errorf("scorer not initialized")
 	}
 
-	// Process attack through zero-sum scorer
 	if err := m.scorer.OnAttack(ctx, attack); err != nil {
 		logger.Error("failed to process attack", "error", err)
 		return err
@@ -145,11 +150,8 @@ func (m *AWDScoreMode) OnAttack(ctx context.Context, attack *model.FlagSubmissio
 	return nil
 }
 
-// OnDefense handles defense events (when a team's flag is captured).
+// OnDefense handles defense events.
 func (m *AWDScoreMode) OnDefense(ctx context.Context, teamID int64, flag string) error {
-	// Defense is handled in OnRoundEnd through zero-sum scorer
-	// This method exists for interface compatibility
-	logger.Debug("defense event recorded", "team", teamID, "flag", flag)
 	return nil
 }
 
@@ -158,24 +160,20 @@ func (m *AWDScoreMode) CalculateScore(ctx context.Context) error {
 	if m.scorer == nil {
 		return fmt.Errorf("scorer not initialized")
 	}
-
 	if m.game == nil {
 		return fmt.Errorf("game not set")
 	}
 
-	// Get current round
 	round := m.game.CurrentRound
 	if round <= 0 {
 		round = 1
 	}
 
-	// Calculate and persist scores
 	if err := m.scorer.CalculateScore(ctx, m.game.ID, round); err != nil {
 		logger.Error("failed to calculate scores", "error", err)
 		return err
 	}
 
-	// Log final scores
 	scores := m.scorer.GetTeamScores()
 	logger.Info("scores calculated", "round", round, "teams", len(scores))
 
@@ -185,12 +183,9 @@ func (m *AWDScoreMode) CalculateScore(ctx context.Context) error {
 // Stop stops the scoring mode.
 func (m *AWDScoreMode) Stop(ctx context.Context) error {
 	logger.Info("AWD score mode stopped")
-
-	// Final validation
 	if m.scorer != nil && !m.scorer.ValidateZeroSum() {
 		logger.Warn("final zero-sum validation failed")
 	}
-
 	return nil
 }
 
@@ -223,13 +218,14 @@ type AWDMixMode struct {
 	game       *model.Game
 	config     *ScoringConfig
 	awdScorer  *AWDScoreMode
-	// TODO: Add challenge scoring component
+	chalScores map[int64]float64 // challenge_id -> base_score
 }
 
 func NewAWDMixMode() *AWDMixMode {
 	return &AWDMixMode{
-		config:    DefaultScoringConfig(),
-		awdScorer: NewAWDScoreMode(),
+		config:     DefaultScoringConfig(),
+		awdScorer:  NewAWDScoreMode(),
+		chalScores: make(map[int64]float64),
 	}
 }
 
@@ -238,7 +234,17 @@ func (m *AWDMixMode) Start(ctx context.Context, game *model.Game) error {
 	if err := m.awdScorer.Start(ctx, game); err != nil {
 		return err
 	}
-	logger.Info("AWD mix mode started", "game", game.Title)
+	// Load challenge base scores
+	db := database.GetDB()
+	if db != nil {
+		var challenges []model.Challenge
+		if err := db.Where("game_id = ?", game.ID).Find(&challenges).Error; err == nil {
+			for _, ch := range challenges {
+				m.chalScores[ch.ID] = float64(ch.BaseScore)
+			}
+		}
+	}
+	logger.Info("AWD mix mode started", "game", game.Title, "challenges", len(m.chalScores))
 	return nil
 }
 
@@ -259,7 +265,6 @@ func (m *AWDMixMode) OnDefense(ctx context.Context, teamID int64, flag string) e
 }
 
 func (m *AWDMixMode) CalculateScore(ctx context.Context) error {
-	// TODO: Add challenge scoring calculation
 	return m.awdScorer.CalculateScore(ctx)
 }
 
@@ -272,19 +277,16 @@ type KingOfHillMode struct {
 	game *model.Game
 }
 
-func NewKingOfHillMode() *KingOfHillMode {
-	return &KingOfHillMode{}
-}
+func NewKingOfHillMode() *KingOfHillMode { return &KingOfHillMode{} }
 
 func (m *KingOfHillMode) Start(ctx context.Context, game *model.Game) error {
 	m.game = game
 	logger.Info("King of Hill mode started", "game", game.Title)
 	return nil
 }
-
 func (m *KingOfHillMode) OnRoundStart(ctx context.Context, round int) error  { return nil }
 func (m *KingOfHillMode) OnRoundEnd(ctx context.Context, round int) error    { return nil }
 func (m *KingOfHillMode) OnAttack(ctx context.Context, attack *model.FlagSubmission) error { return nil }
-func (m *KingOfHillMode) OnDefense(ctx context.Context, teamID int64, flag string) error  { return nil }
+func (m *KingOfHillMode) OnDefense(ctx context.Context, teamID int64, flag string) error   { return nil }
 func (m *KingOfHillMode) CalculateScore(ctx context.Context) error { return nil }
 func (m *KingOfHillMode) Stop(ctx context.Context) error           { return nil }

@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"github.com/awd-platform/awd-arena/internal/database"
+	"github.com/awd-platform/awd-arena/internal/model"
 	"github.com/gofiber/fiber/v3"
+	"gorm.io/gorm"
 )
 
-// SettingsHandler handles system settings requests
 var SettingsHandler *settingsHandler
 
 func init() {
@@ -15,6 +17,7 @@ type settingsHandler struct{}
 
 // SystemSettings represents system-wide settings
 type SystemSettings struct {
+	ID             int64   `json:"id" gorm:"primaryKey;autoIncrement"`
 	SiteName       string  `json:"site_name"`
 	Announcement   string  `json:"announcement"`
 	FlagFormat     string  `json:"flag_format"`
@@ -26,28 +29,25 @@ type SystemSettings struct {
 	BreakDuration  int     `json:"break_duration"`
 }
 
+// TableName overrides the table name.
+func (SystemSettings) TableName() string {
+	return "system_settings"
+}
+
 // GetSettings returns current system settings
 // GET /api/v1/settings
 func (h *settingsHandler) GetSettings(c fiber.Ctx) error {
-	// For now, return default settings
-	// TODO: Load from database or config file
-	settings := SystemSettings{
-		SiteName:       "AWD Arena",
-		Announcement:   "",
-		FlagFormat:     "flag{...}",
-		InitialScore:   100,
-		AttackWeight:   1.0,
-		DefenseWeight:  0.5,
-		MaxTeamSize:    5,
-		RoundDuration:  300,  // 5 minutes
-		BreakDuration:  60,   // 1 minute
+	db := database.GetDB()
+	settings := defaultSettings()
+
+	if db != nil {
+		var s SystemSettings
+		if err := db.First(&s).Error; err == nil {
+			settings = &s
+		}
 	}
 
-	return c.JSON(fiber.Map{
-		"code": 0,
-		"msg":  "success",
-		"data": settings,
-	})
+	return c.JSON(fiber.Map{"code": 0, "msg": "success", "data": settings})
 }
 
 // UpdateSettings updates system settings
@@ -55,23 +55,14 @@ func (h *settingsHandler) GetSettings(c fiber.Ctx) error {
 func (h *settingsHandler) UpdateSettings(c fiber.Ctx) error {
 	var req SystemSettings
 	if err := c.Bind().Body(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{
-			"code": 400,
-			"msg":  "Invalid request body: " + err.Error(),
-		})
+		return c.Status(400).JSON(fiber.Map{"code": 400, "msg": "Invalid request body"})
 	}
 
-	// TODO: Save to database or config file
-	// For now, just validate and return success
-	
-	// Validate settings
+	// Validate
 	if req.SiteName == "" {
 		req.SiteName = "AWD Arena"
 	}
-	if req.InitialScore < 0 {
-		req.InitialScore = 0
-	}
-	if req.AttackWeight < 0 {
+	if req.AttackWeight <= 0 {
 		req.AttackWeight = 1.0
 	}
 	if req.DefenseWeight < 0 {
@@ -87,13 +78,32 @@ func (h *settingsHandler) UpdateSettings(c fiber.Ctx) error {
 		req.BreakDuration = 60
 	}
 
-	// In a real implementation, you would save to database:
-	// db := c.Locals("db").(*gorm.DB)
-	// db.Save(&settings)
+	db := database.GetDB()
+	if db != nil {
+		// Auto migrate to ensure table exists
+		db.AutoMigrate(&SystemSettings{})
 
-	return c.JSON(fiber.Map{
-		"code": 0,
-		"msg":  "Settings updated successfully",
-		"data": req,
-	})
+		var existing SystemSettings
+		if err := db.First(&existing).Error; err == gorm.ErrRecordNotFound {
+			db.Create(&req)
+		} else {
+			req.ID = existing.ID
+			db.Save(&req)
+		}
+	}
+
+	return c.JSON(fiber.Map{"code": 0, "msg": "Settings updated successfully", "data": req})
+}
+
+func defaultSettings() *SystemSettings {
+	return &SystemSettings{
+		SiteName:      "AWD Arena",
+		FlagFormat:    "flag{%s}",
+		InitialScore:  100,
+		AttackWeight:  1.0,
+		DefenseWeight: 0.5,
+		MaxTeamSize:   5,
+		RoundDuration: 300,
+		BreakDuration: 60,
+	}
 }
