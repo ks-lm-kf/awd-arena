@@ -943,13 +943,10 @@ func (h *userHandler) GetUser(c fiber.Ctx) error {
 
 // Resume resumes a paused game.
 func (h *gameHandler) Resume(c fiber.Ctx) error {
-	id := parseID(c.Params("id"))
-	if id == 0 {
-		return c.Status(400).JSON(fiber.Map{"error": "invalid game id"})
+	if err := h.svc.ResumeGame(c.Context(), parseID(c.Params("id"))); err != nil {
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
-
-	// TODO: Implement actual resume logic with engine manager
-	return c.JSON(fiber.Map{"message": "game resumed", "game_id": id})
+	return c.JSON(fiber.Map{"code": 0, "message": "game resumed"})
 }
 
 

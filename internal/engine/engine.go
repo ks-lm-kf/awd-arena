@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/awd-platform/awd-arena/internal/database"
+	"github.com/awd-platform/awd-arena/internal/eventbus"
 	"github.com/awd-platform/awd-arena/internal/model"
 	"github.com/awd-platform/awd-arena/internal/service"
 	"github.com/awd-platform/awd-arena/pkg/logger"
@@ -26,6 +27,7 @@ type CompetitionEngine struct {
 	gameSvc        *service.GameService
 	scorer         *ScoreCalculator
 	roundScheduler *RoundScheduler
+	healthChecker  *HealthChecker
 	cancelFunc     context.CancelFunc
 	running        bool
 	flagWriter     *FlagWriter
@@ -73,8 +75,14 @@ func (e *CompetitionEngine) Start(ctx context.Context) error {
 		logger.Error("initial round start error", "error", err)
 	}
 
+	// Start round scheduler
 	e.roundScheduler = NewRoundScheduler(e)
 	go e.roundScheduler.Run(ctx)
+
+	// Start health checker
+	e.healthChecker = NewHealthChecker(e.game.ID, e.dockerClient)
+	e.healthChecker.Start(ctx)
+
 	logger.Info("competition engine started", "game", e.game.Title)
 	return nil
 }
@@ -85,8 +93,13 @@ func (e *CompetitionEngine) Pause() error {
 	if !e.running {
 		return nil
 	}
-	if e.cancelFunc != nil {
-		e.cancelFunc()
+	// Pause the round scheduler (freezes timer without killing it)
+	if e.roundScheduler != nil {
+		e.roundScheduler.Pause()
+	}
+	// Pause health checker
+	if e.healthChecker != nil {
+		e.healthChecker.Stop()
 	}
 	e.running = false
 	e.currentPhase = "break"
@@ -110,8 +123,18 @@ func (e *CompetitionEngine) Resume(ctx context.Context) error {
 		}
 	}
 
-	e.roundScheduler = NewRoundScheduler(e)
-	go e.roundScheduler.Run(ctx)
+	// Resume or create new round scheduler
+	if e.roundScheduler != nil {
+		e.roundScheduler.Resume(ctx)
+	} else {
+		e.roundScheduler = NewRoundScheduler(e)
+		go e.roundScheduler.Run(ctx)
+	}
+
+	// Resume health checker
+	e.healthChecker = NewHealthChecker(e.game.ID, e.dockerClient)
+	e.healthChecker.Start(ctx)
+
 	logger.Info("competition engine resumed", "round", e.currentRound)
 	return nil
 }
@@ -124,6 +147,11 @@ func (e *CompetitionEngine) Stop(ctx context.Context) error {
 	}
 	e.running = false
 	e.currentPhase = "finished"
+
+	// Stop health checker
+	if e.healthChecker != nil {
+		e.healthChecker.Stop()
+	}
 
 	// Update game in DB
 	db := database.GetDB()
@@ -139,6 +167,13 @@ func (e *CompetitionEngine) Stop(ctx context.Context) error {
 	if err := csvc.TeardownContainers(ctx, e.game.ID); err != nil {
 		logger.Error("failed to teardown containers on stop", "game_id", e.game.ID, "error", err)
 	}
+
+	// Broadcast game finished
+	bus := eventbus.GetBus()
+	_ = bus.Publish(ctx, "game:finished", map[string]interface{}{
+		"game_id": e.game.ID,
+		"round":   e.currentRound,
+	})
 
 	logger.Info("competition engine stopped", "round", e.currentRound)
 	return nil
@@ -174,6 +209,14 @@ func (e *CompetitionEngine) onRoundStart(ctx context.Context, round int) error {
 		logger.Error("failed to write flags to containers", "round", round, "error", err)
 		// Don't return error here, flags were generated successfully
 	}
+
+	// Publish round:start event
+	bus := eventbus.GetBus()
+	_ = bus.Publish(ctx, "round:start", map[string]interface{}{
+		"game_id": e.game.ID,
+		"round":   round,
+		"phase":   "running",
+	})
 
 	logger.Info("round started", "round", round, "game_id", e.game.ID)
 	return nil
@@ -248,6 +291,15 @@ func (e *CompetitionEngine) writeFlagsToContainers(ctx context.Context, round in
 
 func (e *CompetitionEngine) onRoundEnd(ctx context.Context, round int) error {
 	e.currentPhase = "scoring"
+
+	// Publish round:end event
+	bus := eventbus.GetBus()
+	_ = bus.Publish(ctx, "round:end", map[string]interface{}{
+		"game_id": e.game.ID,
+		"round":   round,
+		"phase":   "scoring",
+	})
+
 	return e.scorer.CalculateRoundScores(ctx, round)
 }
 

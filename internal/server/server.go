@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/awd-platform/awd-arena/internal/config"
+	"github.com/awd-platform/awd-arena/internal/eventbus"
 	"github.com/awd-platform/awd-arena/internal/security"
 	"github.com/awd-platform/awd-arena/internal/middleware"
 	"github.com/gofiber/fiber/v3"
@@ -41,6 +42,9 @@ func New(cfg *config.Config) *Server {
 
 	srv := &Server{app: app, cfg: cfg}
 	RegisterRoutes(app)
+
+	// Register WebSocket hub as EventBus broadcaster
+	eventbus.SetBroadcaster(Hub)
 
 	// Serve frontend static files
 	staticDir := cfg.Server.StaticDir

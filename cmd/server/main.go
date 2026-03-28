@@ -51,6 +51,7 @@ func main() {
 		&model.RoundScore{},
 		&model.EventLog{},
 		&model.AdminLog{},
+		&model.ServiceHealth{},
 	)
 	log.Info("database migrated")
 
