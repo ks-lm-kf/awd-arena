@@ -2,8 +2,7 @@ package handler
 
 import (
 	"github.com/awd-platform/awd-arena/internal/database"
-	"github.com/awd-platform/awd-arena/internal/model"
-	"github.com/gofiber/fiber/v3"
+		"github.com/gofiber/fiber/v3"
 	"gorm.io/gorm"
 )
 

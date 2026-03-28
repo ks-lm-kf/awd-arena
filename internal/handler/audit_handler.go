@@ -3,7 +3,8 @@ package handler
 import (
 "github.com/awd-platform/awd-arena/internal/model"
 "github.com/gofiber/fiber/v3"
-"gorm.io/gorm"
+"gorm.io/gorm
+	github.com/awd-platform/awd-arena/internal/database"
 "strconv"
 )
 

@@ -34,6 +34,32 @@ const (
     ViewAllData          Permission = "view_all_data"
 )
 
+
+// Perm aliases for handler convenience
+var (
+    PermManageUsers          = ManageUsers
+    PermManageGames          = ManageGames
+    PermCreateGame           = CreateGame
+    PermEditGame             = EditGame
+    PermDeleteGame           = DeleteGame
+    PermStartGame            = StartGame
+    PermPauseGame            = PauseGame
+    PermStopGame             = StopGame
+    PermViewGame             = ViewGame
+    PermManageChallenges     = ManageChallenges
+    PermCreateChallenge      = CreateChallenge
+    PermEditChallenge        = EditChallenge
+    PermDeleteChallenge      = DeleteChallenge
+    PermManageTeams          = ManageTeams
+    PermSubmitFlag           = SubmitFlag
+    PermViewGameStats        = ViewGameStats
+    PermViewOwnStats         = ViewOwnStats
+    PermViewRankings         = ViewRankings
+    PermManageInfrastructure = ManageInfrastructure
+    PermManageSettings       = ManageSettings
+    PermViewAllData          = ViewAllData
+)
+
 var RolePermissions = map[Role][]Permission{
     RoleAdmin: {
         ManageUsers, ManageGames, CreateGame, EditGame, DeleteGame,

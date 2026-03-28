@@ -30,7 +30,7 @@ func AddWAFRule(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "name and patterns required"})
 	}
 	if security.GlobalWAF == nil {
-		security.GlobalWAF = security.NewWAFEngine(AttackStore)
+		security.GlobalWAF = security.NewWAFEngine(security.NewAttackLogStore(1000))
 	}
 
 	rule := security.WAFFilterRule{

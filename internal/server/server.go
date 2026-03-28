@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/awd-platform/awd-arena/internal/config"
-	"github.com/awd-platform/awd-arena/internal/handler"
+	"github.com/awd-platform/awd-arena/internal/security"
 	"github.com/awd-platform/awd-arena/internal/middleware"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/recover"
@@ -33,7 +33,7 @@ func New(cfg *config.Config) *Server {
 	app.Use(middleware.Logger())
 
 	// Initialize WAF and add as global middleware
-	middleware.InitWAF(handler.AttackStore)
+	middleware.InitWAF(security.NewAttackLogStore(1000))
 	app.Use(middleware.WAFMiddleware())
 
 	// Global API rate limit (100 req/min per IP)
