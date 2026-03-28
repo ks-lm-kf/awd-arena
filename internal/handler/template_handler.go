@@ -29,6 +29,7 @@ func (h *TemplateHandler) List(c fiber.Ctx) error {
 		Difficulty string `form:"difficulty"`
 		Page       int    `form:"page,default=1"`
 		PageSize   int    `form:"page_size,default=20"`
+		Status     string `form:"status"`
 	}{
 		Page:     1,
 		PageSize: 20,
