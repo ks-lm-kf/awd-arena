@@ -46,3 +46,49 @@
 ## Build Status
 - All changes compile successfully with `go build ./cmd/server/`
 
+
+
+### P1-1: Container Health Check
+- **New file**: `internal/engine/health_checker.go`
+- **HealthChecker** goroutine runs every 30 seconds during game
+- Docker API `ContainerInspect` to check container running state
+- Optional TCP port probe on container IP:port
+- Updates `TeamContainer.Status` (running/stopped/error)
+- Status change detection → writes `EventLog` + publishes `container:status` via EventBus
+- Records to `ServiceHealth` table (auto-migrated)
+- `ServiceHealth` model registered in `main.go` AutoMigrate
+
+### P1-2: Round Timer with Pause/Resume
+- **Modified**: `internal/engine/round.go` - RoundScheduler now supports Pause/Resume
+- **Pause**: Freezes the round timer without killing the goroutine (waits in spin loop)
+- **Resume**: Adjusts `roundStartTime` by paused duration, continues from where it left off
+- Round/break durations work correctly, totalRounds respected
+- Game finished detection after final round
+
+### P1-3: EventBus + WebSocket Real-time Push
+- **Modified**: `internal/eventbus/bus.go` - Bus.Publish now actually dispatches
+- Events published → WebSocket broadcast via `BroadcastWS()` (JSON with type+data+ts)
+- Events: `round:start`, `round:end`, `game:finished`, `container:status`, `ranking:update`
+- WSHub registered as EventBus broadcaster via `eventbus.SetBroadcaster(Hub)` in server.go
+- Subscriber API: `bus.SubscribeSimple(subject, handler)` for in-process listeners
+
+### P1-4: Game Lifecycle Complete
+- **Start**: Provision containers → Start engine (round scheduler + health checker)
+- **Pause**: Pause round scheduler + stop health checker
+- **Resume**: Resume round scheduler + restart health checker (from paused position)
+- **Stop**: Stop scheduler + health checker → cleanup containers → broadcast game:finished
+- **Resume handler**: Fixed TODO → now calls `h.svc.ResumeGame()` (was placeholder)
+- All routes verified: POST /api/v1/games/:id/{start,pause,resume,stop}
+
+## Additional Files Modified (P1)
+- `cmd/server/main.go` - Added ServiceHealth to AutoMigrate
+- `internal/engine/engine.go` - Integrated HealthChecker, event publishing on round start/end/stop
+- `internal/engine/round.go` - Pause/Resume support in RoundScheduler
+- `internal/engine/health_checker.go` - NEW: Full container health monitoring
+- `internal/eventbus/bus.go` - Real publish/subscribe implementation
+- `internal/handler/auth_handler.go` - Fixed Resume handler
+- `internal/server/server.go` - EventBus broadcaster registration
+
+## Build Status
+- All changes compile successfully with `go build ./cmd/server/`
+- Committed: `c03273d` P1: health check, round timer pause/resume, real EventBus+WS broadcast, game lifecycle
