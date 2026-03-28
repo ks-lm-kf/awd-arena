@@ -20,7 +20,7 @@ type auditHandler struct{}
 // GetAuditLogs returns all audit logs with filtering
 // GET /api/audit/logs
 func (h *auditHandler) GetAuditLogs(c fiber.Ctx) error {
-db := c.Locals("db").(*gorm.DB)
+db := database.GetDB()
 
 page, _ := strconv.Atoi(c.Query("page", "1"))
 pageSize, _ := strconv.Atoi(c.Query("page_size", "50"))
@@ -80,7 +80,7 @@ return c.JSON(fiber.Map{
 // GetAuditStats returns audit statistics
 // GET /api/audit/stats
 func (h *auditHandler) GetAuditStats(c fiber.Ctx) error {
-db := c.Locals("db").(*gorm.DB)
+db := database.GetDB()
 
 var stats struct {
 TotalLogs     int64 `json:"total_logs"`
