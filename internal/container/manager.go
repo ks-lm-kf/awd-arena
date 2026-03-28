@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -158,12 +159,25 @@ func (m *ContainerManager) CreateChallengeContainer(ctx context.Context, teamID 
 	// Generate SSH password before saving
 	sshPassword := generateRandomPassword(12)
 
+	// Build port mapping JSON
+	portMappingJSON := "{}"
+	if len(ports) > 0 {
+		pm := make(map[string]int)
+		for cp, hp := range ports {
+			pm[fmt.Sprintf("%d", cp)] = hp
+		}
+		if pmBytes, err := json.Marshal(pm); err == nil {
+			portMappingJSON = string(pmBytes)
+		}
+	}
+
 	tc := &model.TeamContainer{
 		GameID:      gameID,
 		TeamID:      teamID,
 		ChallengeID: challenge.ID,
 		ContainerID: containerID,
 		IPAddress:   ipAddress,
+		PortMapping: portMappingJSON,
 		Status:      "running",
 		SSHUser:     "awd",
 		SSHPassword: sshPassword,

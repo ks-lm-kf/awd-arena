@@ -96,10 +96,20 @@ func (s *ContainerService) ProvisionContainers(ctx context.Context, gameID int64
 		return errors.New("database not initialized")
 	}
 
-	// Get all teams for this game
-	var teams []model.Team
-	if err := db.Find(&teams).Error; err != nil {
+	// Get teams for this game via GameTeam table
+	var gameTeams []model.GameTeam
+	if err := db.Where("game_id = ?", gameID).Find(&gameTeams).Error; err != nil {
 		return err
+	}
+	var teamIDs []int64
+	for _, gt := range gameTeams {
+		teamIDs = append(teamIDs, gt.TeamID)
+	}
+	var teams []model.Team
+	if len(teamIDs) > 0 {
+		if err := db.Where("id IN ?", teamIDs).Find(&teams).Error; err != nil {
+			return err
+		}
 	}
 
 	// Get all challenges for this game
@@ -151,11 +161,11 @@ func (s *ContainerService) ProvisionContainers(ctx context.Context, gameID int64
 	}
 
 	// Setup cross-team isolation
-	var teamIDs []int64
+	var isoTeamIDs []int64
 	for _, t := range teams {
-		teamIDs = append(teamIDs, t.ID)
+		isoTeamIDs = append(teamIDs, t.ID)
 	}
-	_ = netMgr.IsolateTeams(ctx, teamIDs)
+	_ = netMgr.IsolateTeams(ctx, isoTeamIDs)
 
 	logger.Info("provisioning complete", "teams", len(teams), "challenges", len(challenges))
 	return nil

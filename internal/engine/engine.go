@@ -134,6 +134,12 @@ func (e *CompetitionEngine) Stop(ctx context.Context) error {
 		})
 	}
 
+	// Cleanup all containers for this game
+	csvc := &service.ContainerService{}
+	if err := csvc.TeardownContainers(ctx, e.game.ID); err != nil {
+		logger.Error("failed to teardown containers on stop", "game_id", e.game.ID, "error", err)
+	}
+
 	logger.Info("competition engine stopped", "round", e.currentRound)
 	return nil
 }

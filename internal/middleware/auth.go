@@ -101,7 +101,8 @@ func GetJWTSecret() string {
 
 // ValidateToken parses and validates a JWT token from the request.
 func ValidateToken(c fiber.Ctx, secret string) (int64, error) {
-	authHeader := c.Get("Authorization")
+	logger.Info("[JWTAuth DEBUG]", "path", c.Path(), "method", c.Method())
+		authHeader := c.Get("Authorization")
 	if authHeader == "" {
 		return 0, fmt.Errorf("missing authorization header")
 	}

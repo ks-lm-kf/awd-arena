@@ -149,9 +149,9 @@ func (h *authHandler) ChangePassword(c fiber.Ctx) error {
 
 // validateUsername validates the username format to prevent XSS
 func validateUsername(username string) error {
-	matched, _ := regexp.MatchString(`^[a-zA-Z0-9_\u4e00-\u9fa5]{2,20}$`, username)
+	matched, _ := regexp.MatchString(`^[a-zA-Z0-9_\x{4e00}-\x{9fa5}]{2,50}$`, username)
 	if !matched {
-		return errors.New("用户名只能包含字母、数字、下划线、中文 (2-20字符)")
+		return errors.New("用户名只能包含字母、数字、下划线、中文 (2-50字符)")
 	}
 	return nil
 }
@@ -261,13 +261,14 @@ func (h *authHandler) RefreshToken(c fiber.Ctx) error {
 
 
 func (h *authHandler) Me(c fiber.Ctx) error {
-	// DEBUG: Check Locals
 	userIDRaw := c.Locals("user_id")
-	logger.Info("Me DEBUG", "user_id type", fmt.Sprintf("%T", userIDRaw), "value", userIDRaw)
 	userID, ok := userIDRaw.(int64)
 	if !ok {
-		logger.Error("Me DEBUG: user_id assertion failed")
-		return c.Status(401).JSON(fiber.Map{"code": 401, "message": "unauthorized"})
+		uid, err := middleware.ValidateToken(c, middleware.GetJWTSecret())
+		if err != nil {
+			return c.Status(401).JSON(fiber.Map{"code": 401, "message": "unauthorized"})
+		}
+		userID = uid
 	}
 	userInfo, err := h.svc.GetUser(c.Context(), userID)
 	if err != nil {

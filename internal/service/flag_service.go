@@ -44,19 +44,27 @@ func (s *FlagService) GenerateFlags(ctx context.Context, gameID int64, round int
 		return err
 	}
 
-	var teams []model.Team
-	if err := db.Find(&teams).Error; err != nil {
+	// Get teams for this game via GameTeam table
+	var gameTeams []model.GameTeam
+	if err := db.Where("game_id = ?", gameID).Find(&gameTeams).Error; err != nil {
 		return err
 	}
-
-	flagFormat := game.FlagFormat
-	if flagFormat == "" {
-		flagFormat = "flag{%s}"
+	var teamIDs []int64
+	for _, gt := range gameTeams {
+		teamIDs = append(teamIDs, gt.TeamID)
+	}
+	var teams []model.Team
+	if len(teamIDs) > 0 {
+		if err := db.Where("id IN ?", teamIDs).Find(&teams).Error; err != nil {
+			return err
+		}
 	}
 
 	for _, team := range teams {
 		for _, ch := range challenges {
-			flagValue := crypto.GenerateFlag(flagFormat, fmt.Sprintf("%d", team.ID), ch.Name, round)
+			// Use consistent format: flag{gameID_round_teamID_challengeID_random}
+			randomHex, _ := crypto.GenerateRandomHex(16)
+			flagValue := fmt.Sprintf("flag{%d_%d_%d_%d_%s}", gameID, round, team.ID, ch.ID, randomHex)
 			record := model.FlagRecord{
 				GameID:    gameID,
 				Round:     round,

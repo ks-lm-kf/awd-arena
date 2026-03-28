@@ -25,10 +25,20 @@ func (sc *ScoreCalculator) CalculateRoundScores(ctx context.Context, round int) 
 		return nil
 	}
 
-	// Get all teams
-	var teams []model.Team
-	if err := db.Find(&teams).Error; err != nil {
+	// Get teams for this game via GameTeam table
+	var gameTeams []model.GameTeam
+	if err := db.Where("game_id = ?", sc.game.ID).Find(&gameTeams).Error; err != nil {
 		return err
+	}
+	var teamIDs []int64
+	for _, gt := range gameTeams {
+		teamIDs = append(teamIDs, gt.TeamID)
+	}
+	var teams []model.Team
+	if len(teamIDs) > 0 {
+		if err := db.Where("id IN ?", teamIDs).Find(&teams).Error; err != nil {
+			return err
+		}
 	}
 
 	// Get correct submissions for this round

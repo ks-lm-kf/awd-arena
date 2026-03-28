@@ -41,6 +41,7 @@ func RegisterRoutes(app *fiber.App) {
 	teams.Get("/:id/members", middleware.RequirePermission(model.PermViewRankings), handler.TeamHandler.Members)
 	teams.Post("/:id/members", middleware.RequirePermission(model.PermManageTeams), handler.TeamHandler.AddMember)
 	teams.Delete("/:id/members/:userId", middleware.RequirePermission(model.PermManageTeams), handler.TeamHandler.RemoveMember)
+	teams.Delete("/:id", middleware.RequirePermission(model.PermManageTeams), handler.AdminHandler.DeleteTeam)
 
 	// Games - Players can view, Organizers can manage
 	games := v1.Group("/games", middleware.JWTAuth())
@@ -82,6 +83,7 @@ func RegisterRoutes(app *fiber.App) {
 
 	// Player container info - Players can view their own containers
 	games.Get("/:id/my-containers", middleware.RequirePermission(model.PermViewOwnStats), handler.ScoreHandler.GetMyContainers)
+	games.Get("/:id/my-machines", middleware.RequirePermission(model.PermViewOwnStats), handler.ScoreHandler.GetMyContainers)
 
 	// WebSocket (token validated via query param in ws.go)
 	app.Get("/ws", HandleWebSocket)
@@ -150,6 +152,11 @@ func RegisterRoutes(app *fiber.App) {
 	settings.Get("/", handler.SettingsHandler.GetSettings)
 	settings.Put("/", middleware.RequirePermission(model.PermManageSettings), handler.SettingsHandler.UpdateSettings)
 
+	// WAF rules alias (test expects /api/v1/waf/rules)
+	// WAF rules - use group-level auth
+	wafGroup := v1.Group("/waf", middleware.JWTAuth(), middleware.RequireRole(model.RoleAdmin))
+	wafGroup.Get("/rules", handler.GetWAFRules)
+
 	// Health
 	app.Get("/health", func(c fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok"})
@@ -168,7 +175,9 @@ func RegisterRoutes(app *fiber.App) {
 	// Export API
 	export := v1.Group("/games/:id/export", middleware.JWTAuth())
 	export.Get("/scoreboard/csv", handler.ExportHandler.ExportRankingCSV)
+	export.Get("/ranking/csv", handler.ExportHandler.ExportRankingCSV)
 	export.Get("/scoreboard/pdf", handler.ExportHandler.ExportRankingPDF)
+	export.Get("/ranking/pdf", handler.ExportHandler.ExportRankingPDF)
 	export.Get("/attacks", handler.ExportHandler.ExportAttackLog)
 	export.Get("/all", handler.ExportHandler.ExportAll)
 }
