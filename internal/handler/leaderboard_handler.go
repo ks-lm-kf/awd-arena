@@ -2,15 +2,15 @@ package handler
 
 import (
 	"context"
+	"sort"
 
+	"github.com/awd-platform/awd-arena/internal/database"
 	"github.com/awd-platform/awd-arena/internal/eventbus"
 	"github.com/awd-platform/awd-arena/internal/model"
 	"github.com/gofiber/fiber/v3"
 	"gorm.io/gorm"
-	"sort"
 )
 
-// LeaderboardHandler handles leaderboard-related requests
 var LeaderboardHandler *leaderboardHandler
 
 func init() {
@@ -19,337 +19,128 @@ func init() {
 
 type leaderboardHandler struct{}
 
-// RankHistoryEntry represents a single historical ranking entry
 type RankHistoryEntry struct {
-	Round      int64   `json:"round"`
+	Round      int     `json:"round"`
 	TeamID     int64   `json:"team_id"`
 	TeamName   string  `json:"team_name"`
 	Rank       int     `json:"rank"`
 	TotalScore float64 `json:"total_score"`
 }
 
-// LeaderboardResponse represents the leaderboard response
 type LeaderboardResponse struct {
-	GameID  int64                  `json:"game_id"`
+	GameID  int64                    `json:"game_id"`
 	Entries []model.LeaderboardEntry `json:"entries"`
 }
 
 // Get returns the current leaderboard for a game
-// GET /api/v1/games/:id/leaderboard
 func (h *leaderboardHandler) Get(c fiber.Ctx) error {
 	gameID := parseID(c.Params("id"))
-
-	entries, err := h.getLeaderboard(c, gameID)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"code":    500,
-			"message": err.Error(),
-		})
+	db := database.GetDB()
+	if db == nil {
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "database not available"})
 	}
-
-	return c.JSON(fiber.Map{
-		"code":    0,
-		"message": "ok",
-		"data": LeaderboardResponse{
-			GameID:  gameID,
-			Entries: entries,
-		},
-	})
+	entries, err := h.buildLeaderboard(db, gameID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+	}
+	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": entries})
 }
 
-// GetHistory returns the historical rankings for all rounds in a game
-// GET /api/v1/games/:id/rankings/history
+// GetRound returns rankings for a specific round
+func (h *leaderboardHandler) GetRound(c fiber.Ctx) error {
+	gameID := parseID(c.Params("id"))
+	round := parseID(c.Params("round"))
+	db := database.GetDB()
+	if db == nil {
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "database not available"})
+	}
+	teamMap := h.getTeamMap(db)
+	var roundScores []model.RoundScore
+	if err := db.Where("game_id = ? AND round = ?", gameID, int(round)).Order("total_score desc").Find(&roundScores).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+	}
+	var entries []model.LeaderboardEntry
+	for i, rs := range roundScores {
+		entries = append(entries, model.LeaderboardEntry{
+			TeamID: rs.TeamID, TeamName: teamMap[rs.TeamID],
+			TotalScore: rs.TotalScore, AttackScore: rs.AttackScore, DefenseScore: rs.DefenseScore, Rank: i + 1,
+		})
+	}
+	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": entries})
+}
+
+// GetHistory returns historical rankings
 func (h *leaderboardHandler) GetHistory(c fiber.Ctx) error {
 	gameID := parseID(c.Params("id"))
-
-	entries, err := h.getRankHistory(c, gameID)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"code":    500,
-			"message": err.Error(),
-		})
+	db := database.GetDB()
+	if db == nil {
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "database not available"})
 	}
-
-	return c.JSON(fiber.Map{
-		"code":    0,
-		"message": "ok",
-		"data":    entries,
-	})
-}
-
-// getRankHistory returns historical rankings for all rounds
-func (h *leaderboardHandler) getRankHistory(c fiber.Ctx, gameID int64) ([]RankHistoryEntry, error) {
-	db := c.Locals("db").(*gorm.DB)
-
-	// Get all teams
-	var gameTeams []model.GameTeam
-	if err := db.Where("game_id = ?", gameID).Find(&gameTeams).Error; err != nil {
-		return nil, err
-	}
-
-	teamIDs := make([]int64, len(gameTeams))
-	for i, gt := range gameTeams {
-		teamIDs[i] = gt.TeamID
-	}
-
-	var teams []model.Team
-	if err := db.Where("id IN ?", teamIDs).Find(&teams).Error; err != nil {
-		return nil, err
-	}
-
-	teamMap := make(map[int64]model.Team)
-	for _, team := range teams {
-		teamMap[team.ID] = team
-	}
-
-	// Get all round scores
+	teamMap := h.getTeamMap(db)
 	var roundScores []model.RoundScore
-	if err := db.Where("game_id = ?", gameID).Order("round, team_id").Find(&roundScores).Error; err != nil {
-		return nil, err
+	if err := db.Where("game_id = ?", gameID).Order("round, total_score desc").Find(&roundScores).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
-
-	// Group by round
-	roundMap := make(map[int][]model.RoundScore)
-	for _, rs := range roundScores {
-		roundMap[rs.Round] = append(roundMap[rs.Round], rs)
-	}
-
-	// Calculate rankings for each round
 	var history []RankHistoryEntry
-	for round := 1; round <= len(roundMap); round++ {
-		scores, exists := roundMap[round]
-		if !exists {
-			continue
-		}
-
-		// Sort by total score
-		sort.Slice(scores, func(i, j int) bool {
-			return scores[i].TotalScore > scores[j].TotalScore
+	for _, rs := range roundScores {
+		history = append(history, RankHistoryEntry{
+			Round: rs.Round, TeamID: rs.TeamID, TeamName: teamMap[rs.TeamID],
+			TotalScore: rs.TotalScore, Rank: rs.Rank,
 		})
-
-		// Assign ranks
-		for i, score := range scores {
-			team, exists := teamMap[score.TeamID]
-			teamName := ""
-			if exists {
-				teamName = team.Name
-			}
-
-			history = append(history, RankHistoryEntry{
-				Round:      int64(round),
-				TeamID:     score.TeamID,
-				TeamName:   teamName,
-				Rank:       i + 1,
-				TotalScore: score.TotalScore,
-			})
-		}
 	}
-
-	return history, nil
+	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": history})
 }
 
-// getLeaderboard calculates and returns the leaderboard entries
-func (h *leaderboardHandler) getLeaderboard(c fiber.Ctx, gameID int64) ([]model.LeaderboardEntry, error) {
-	db := c.Locals("db").(*gorm.DB)
-
-	// Get all teams participating in the game
-	var gameTeams []model.GameTeam
-	if err := db.Where("game_id = ?", gameID).Find(&gameTeams).Error; err != nil {
-		return nil, err
+// BroadcastUpdate rebuilds and broadcasts leaderboard
+func (h *leaderboardHandler) BroadcastUpdate(gameID int64, db *gorm.DB) error {
+	entries, err := h.buildLeaderboard(db, gameID)
+	if err != nil {
+		return err
 	}
-
-	// Get team details
-	teamIDs := make([]int64, len(gameTeams))
-	for i, gt := range gameTeams {
-		teamIDs[i] = gt.TeamID
+	bus := eventbus.GetBus()
+	if bus != nil {
+		bus.Publish(context.Background(), "ranking:update", entries)
 	}
+	return nil
+}
 
-	var teams []model.Team
-	if err := db.Where("id IN ?", teamIDs).Find(&teams).Error; err != nil {
-		return nil, err
-	}
-
-	teamMap := make(map[int64]model.Team)
-	for _, team := range teams {
-		teamMap[team.ID] = team
-	}
-
-	// Calculate scores from RoundScore
+func (h *leaderboardHandler) buildLeaderboard(db *gorm.DB, gameID int64) ([]model.LeaderboardEntry, error) {
+	teamMap := h.getTeamMap(db)
 	var roundScores []model.RoundScore
 	if err := db.Where("game_id = ?", gameID).Find(&roundScores).Error; err != nil {
 		return nil, err
 	}
-
-	// Aggregate scores by team
-	type teamStats struct {
-		attackScore  float64
-		defenseScore float64
-		totalScore   float64
-		firstBloods  int
+	type teamAgg struct {
+		TeamID       int64
+		TotalScore   float64
+		AttackScore  float64
+		DefenseScore float64
 	}
-	teamScores := make(map[int64]*teamStats)
-
+	aggMap := make(map[int64]*teamAgg)
 	for _, rs := range roundScores {
-		if _, exists := teamScores[rs.TeamID]; !exists {
-			teamScores[rs.TeamID] = &teamStats{}
+		if _, ok := aggMap[rs.TeamID]; !ok {
+			aggMap[rs.TeamID] = &teamAgg{TeamID: rs.TeamID}
 		}
-		teamScores[rs.TeamID].attackScore += rs.AttackScore
-		teamScores[rs.TeamID].defenseScore += rs.DefenseScore
-		teamScores[rs.TeamID].totalScore += rs.TotalScore
+		aggMap[rs.TeamID].TotalScore += rs.TotalScore
+		aggMap[rs.TeamID].AttackScore += rs.AttackScore
+		aggMap[rs.TeamID].DefenseScore += rs.DefenseScore
 	}
-
-	// Count first bloods from FlagSubmission
-	type firstBloodCount struct {
-		TeamID int64 `gorm:"column:attacker_team"`
-		Count  int   `gorm:"column:count"`
-	}
-	var firstBloodCounts []firstBloodCount
-	db.Table("flag_submissions").
-		Select("attacker_team, COUNT(*) as count").
-		Where("game_id = ? AND is_correct = ? AND is_first_blood = ?", gameID, true, true).
-		Group("attacker_team").
-		Scan(&firstBloodCounts)
-
-	for _, fbc := range firstBloodCounts {
-		if stats, exists := teamScores[fbc.TeamID]; exists {
-			stats.firstBloods = fbc.Count
-		}
-	}
-
-	// Build leaderboard entries
 	var entries []model.LeaderboardEntry
-	for teamID, stats := range teamScores {
-		team, exists := teamMap[teamID]
-		teamName := ""
-		if exists {
-			teamName = team.Name
-		}
+	for _, agg := range aggMap {
 		entries = append(entries, model.LeaderboardEntry{
-			TeamID:       teamID,
-			TeamName:     teamName,
-			TotalScore:   stats.totalScore,
-			AttackScore:  stats.attackScore,
-			DefenseScore: stats.defenseScore,
-			FirstBloods:  stats.firstBloods,
+			TeamID: agg.TeamID, TeamName: teamMap[agg.TeamID],
+			TotalScore: agg.TotalScore, AttackScore: agg.AttackScore, DefenseScore: agg.DefenseScore,
 		})
 	}
-
-	// Sort by total score descending
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].TotalScore > entries[j].TotalScore
-	})
-
-	// Assign ranks
-	for i := range entries {
-		entries[i].Rank = i + 1
-	}
-
+	sort.Slice(entries, func(i, j int) bool { return entries[i].TotalScore > entries[j].TotalScore })
+	for i := range entries { entries[i].Rank = i + 1 }
 	return entries, nil
 }
 
-// BroadcastUpdate broadcasts the current leaderboard to all WebSocket clients
-func (h *leaderboardHandler) BroadcastUpdate(gameID int64, db *gorm.DB) error {
-	// Create a fiber context alternative for getting leaderboard
-	// We'll use a mock context or direct DB queries
-
-	// Get all teams participating in the game
-	var gameTeams []model.GameTeam
-	if err := db.Where("game_id = ?", gameID).Find(&gameTeams).Error; err != nil {
-		return err
-	}
-
-	// Get team details
-	teamIDs := make([]int64, len(gameTeams))
-	for i, gt := range gameTeams {
-		teamIDs[i] = gt.TeamID
-	}
-
+func (h *leaderboardHandler) getTeamMap(db *gorm.DB) map[int64]string {
 	var teams []model.Team
-	if err := db.Where("id IN ?", teamIDs).Find(&teams).Error; err != nil {
-		return err
-	}
-
-	teamMap := make(map[int64]model.Team)
-	for _, team := range teams {
-		teamMap[team.ID] = team
-	}
-
-	// Calculate scores from RoundScore
-	var roundScores []model.RoundScore
-	if err := db.Where("game_id = ?", gameID).Find(&roundScores).Error; err != nil {
-		return err
-	}
-
-	// Aggregate scores by team
-	type teamStats struct {
-		attackScore  float64
-		defenseScore float64
-		totalScore   float64
-		firstBloods  int
-	}
-	teamScores := make(map[int64]*teamStats)
-
-	for _, rs := range roundScores {
-		if _, exists := teamScores[rs.TeamID]; !exists {
-			teamScores[rs.TeamID] = &teamStats{}
-		}
-		teamScores[rs.TeamID].attackScore += rs.AttackScore
-		teamScores[rs.TeamID].defenseScore += rs.DefenseScore
-		teamScores[rs.TeamID].totalScore += rs.TotalScore
-	}
-
-	// Count first bloods
-	type firstBloodCount struct {
-		TeamID int64 `gorm:"column:attacker_team"`
-		Count  int   `gorm:"column:count"`
-	}
-	var firstBloodCounts []firstBloodCount
-	db.Table("flag_submissions").
-		Select("attacker_team, COUNT(*) as count").
-		Where("game_id = ? AND is_correct = ? AND is_first_blood = ?", gameID, true, true).
-		Group("attacker_team").
-		Scan(&firstBloodCounts)
-
-	for _, fbc := range firstBloodCounts {
-		if stats, exists := teamScores[fbc.TeamID]; exists {
-			stats.firstBloods = fbc.Count
-		}
-	}
-
-	// Build leaderboard entries
-	var entries []model.LeaderboardEntry
-	for teamID, stats := range teamScores {
-		team, exists := teamMap[teamID]
-		teamName := ""
-		if exists {
-			teamName = team.Name
-		}
-		entries = append(entries, model.LeaderboardEntry{
-			TeamID:       teamID,
-			TeamName:     teamName,
-			TotalScore:   stats.totalScore,
-			AttackScore:  stats.attackScore,
-			DefenseScore: stats.defenseScore,
-			FirstBloods:  stats.firstBloods,
-		})
-	}
-
-	// Sort by total score descending
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].TotalScore > entries[j].TotalScore
-	})
-
-	// Assign ranks
-	for i := range entries {
-		entries[i].Rank = i + 1
-	}
-
-	// Broadcast to WebSocket clients via eventbus
-	bus := eventbus.GetBus()
-	_ = bus.Publish(context.Background(), "leaderboard:update", &model.ScoreUpdate{
-		GameID:  gameID,
-		Entries: entries,
-	})
-
-	return nil
+	db.Find(&teams)
+	m := make(map[int64]string, len(teams))
+	for _, t := range teams { m[t.ID] = t.Name }
+	return m
 }

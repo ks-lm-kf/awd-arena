@@ -16,7 +16,6 @@ import (
 	"github.com/awd-platform/awd-arena/internal/service"
 	"github.com/awd-platform/awd-arena/pkg/logger"
 	"github.com/gofiber/fiber/v3"
-	"gorm.io/gorm"
 )
 
 var (
@@ -615,7 +614,7 @@ func (h *flagHandler) Submit(c fiber.Ctx) error {
 
 	// Broadcast leaderboard update if flag was correct
 	if correct {
-		db := c.Locals("db").(*gorm.DB)
+		db := database.GetDB()
 		go func() {
 			if err := LeaderboardHandler.BroadcastUpdate(gameID, db); err != nil {
 				logger.Error("failed to broadcast leaderboard update", "game_id", gameID, "error", err)
