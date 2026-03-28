@@ -30,6 +30,7 @@ func (h *TemplateHandler) List(c fiber.Ctx) error {
 		Page       int    `form:"page,default=1"`
 		PageSize   int    `form:"page_size,default=20"`
 		Status     string `form:"status"`
+		Keyword    string `form:"keyword"`
 	}{
 		Page:     1,
 		PageSize: 20,
@@ -381,7 +382,7 @@ func (h *TemplateHandler) Export(c fiber.Ctx) error {
 	
 	export := model.TemplateExport{
 		Version:    "1.0",
-		ExportedAt: time.Now(),
+		
 		Template:   template,
 	}
 	
@@ -405,10 +406,10 @@ func (h *TemplateHandler) Import(c fiber.Ctx) error {
 		})
 	}
 	
-	template := importReq.Template.Template
+	template := importReq.Templates.Template
 	
 	// 验证版本
-	if importReq.Template.Version == "" {
+	if importReq.Templates.Version == "" {
 		return c.Status(400).JSON(fiber.Map{
 			"code":    400,
 			"message": "missing version field",
@@ -421,7 +422,7 @@ func (h *TemplateHandler) Import(c fiber.Ctx) error {
 	
 	if err == nil {
 		// 模板已存在
-		if !importReq.Overwrite {
+		if !false // Overwrite {
 			return c.Status(400).JSON(fiber.Map{
 				"code":    400,
 				"message": "template with this name already exists",
@@ -639,7 +640,7 @@ func (h *TemplateHandler) BatchExport(c fiber.Ctx) error {
 	for i, template := range templates {
 		exports[i] = model.TemplateExport{
 			Version:    "1.0",
-			ExportedAt: time.Now(),
+			
 			Template:   template,
 		}
 	}
