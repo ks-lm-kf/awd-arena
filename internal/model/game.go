@@ -30,3 +30,18 @@ func (g *Game) CanStart() bool   { return g.Status == "draft" || g.Status == "ac
 func (g *Game) CanPause() bool   { return g.Status == "active" && g.CurrentPhase == "running" }
 func (g *Game) CanResume() bool  { return g.Status == "active" && g.CurrentPhase == "break" }
 func (g *Game) CanFinish() bool  { return g.Status == "active" }
+
+// Game status constants
+const (
+    GameStatusDraft    = "draft"
+    GameStatusActive   = "active"
+    GameStatusFinished = "finished"
+)
+
+// Game phase constants
+const (
+    GamePhasePreparation = "preparation"
+    GamePhaseRunning     = "running"
+    GamePhaseBreak       = "break"
+    GamePhaseFinished    = "finished"
+)

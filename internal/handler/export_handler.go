@@ -119,31 +119,5 @@ func (h *exportHandler) ExportAll(c fiber.Ctx) error {
     })
 }
 
-func parseID(s string) int64 {
-    var n int64
-    for _, c := range s {
-        if c >= '0' && c <= '9' {
-            n = n*10 + int64(c-'0')
-        }
-    }
-    return n
-}
 
-func itoa(n int) string { return itoa64(int64(n)) }
 
-func itoa64(n int64) string {
-    if n == 0 { return "0" }
-    neg := n < 0
-    if neg { n = -n }
-    s := ""
-    for n > 0 { s = string('0'+n%10) + s; n /= 10 }
-    if neg { s = "-" + s }
-    return s
-}
-
-func ftoa(f float64) string {
-    i := int64(f)
-    frac := int64((f - float64(i)) * 100)
-    if frac < 0 { frac = -frac }
-    return itoa64(i) + "." + string('0'+frac/10%10) + string('0'+frac%10)
-}
