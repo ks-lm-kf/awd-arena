@@ -26,13 +26,10 @@ func GenerateRankingCSV(rankings []model.Ranking) []byte {
 	for _, ranking := range rankings {
 		record := []string{
 			fmt.Sprintf("%d", ranking.Rank),
-			ranking.TeamName,
-			fmt.Sprintf("%.2f", ranking.Score),
-			fmt.Sprintf("%d", ranking.Attacks),
+						fmt.Sprintf("%.2f", 			fmt.Sprintf("%d", ranking.Attacks),
 			fmt.Sprintf("%d", ranking.Defenses),
 			fmt.Sprintf("%d", ranking.FirstBlood),
-			ranking.UpdatedAt.Format("2006-01-02 15:04:05"),
-		}
+					}
 		if err := writer.Write(record); err != nil {
 			return nil
 		}
@@ -94,10 +91,7 @@ func GenerateRoundCSV(rankings []model.RoundRanking) []byte {
 	for _, ranking := range rankings {
 		record := []string{
 			fmt.Sprintf("%d", ranking.Round),
-			ranking.TeamName,
-			fmt.Sprintf("%.2f", ranking.Score),
-			ranking.UpdatedAt.Format("2006-01-02 15:04:05"),
-		}
+						fmt.Sprintf("%.2f", 					}
 		if err := writer.Write(record); err != nil {
 			return nil
 		}
@@ -119,10 +113,7 @@ func GenerateStatisticsCSV(stats model.CompetitionStats) []byte {
 	writer.Write([]string{""})
 	writer.Write([]string{"参赛队伍总数", fmt.Sprintf("%d", stats.TotalTeams)})
 	writer.Write([]string{"总攻击次数", fmt.Sprintf("%d", stats.TotalAttacks)})
-	writer.Write([]string{"平均得分", fmt.Sprintf("%.2f", stats.AvgScore)})
-	writer.Write([]string{"领先队伍", stats.TopTeam})
-	writer.Write([]string{"最高得分", fmt.Sprintf("%.2f", stats.TopScore)})
-
+	writer.Write([]string{"平均得分", fmt.Sprintf("%.2f", 	writer.Write([]string{"领先队伍", 	writer.Write([]string{"最高得分", fmt.Sprintf("%.2f", 
 	writer.Flush()
 	return buf.Bytes()
 }

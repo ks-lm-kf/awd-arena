@@ -24,7 +24,12 @@ func NewTemplateHandler() *TemplateHandler {
 // List 获取模板列表
 // GET /api/v1/templates
 func (h *TemplateHandler) List(c fiber.Ctx) error {
-	query := model.TemplateListQuery{
+	query := struct {
+		Category   string `form:"category"`
+		Difficulty string `form:"difficulty"`
+		Page       int    `form:"page,default=1"`
+		PageSize   int    `form:"page_size,default=20"`
+	}{
 		Page:     1,
 		PageSize: 20,
 	}
@@ -229,16 +234,16 @@ func (h *TemplateHandler) Update(c fiber.Ctx) error {
 	if updateData.Description != "" {
 		template.Description = updateData.Description
 	}
-	if updateData.ImageConfig.ImageName != "" {
+	if updateData.ImageConfig.Name != "" {
 		template.ImageConfig = updateData.ImageConfig
 	}
 	if len(updateData.ServicePorts) > 0 {
 		template.ServicePorts = updateData.ServicePorts
 	}
-	if updateData.VulnConfig.VulnType != "" {
+	if updateData.VulnConfig.Type != "" {
 		template.VulnConfig = updateData.VulnConfig
 	}
-	if updateData.FlagConfig.FlagType != "" {
+	if updateData.FlagConfig.Type != "" {
 		template.FlagConfig = updateData.FlagConfig
 	}
 	if updateData.Difficulty != "" {
@@ -335,7 +340,7 @@ func (h *TemplateHandler) Preview(c fiber.Ctx) error {
 	
 	// 生成预览数据
 	preview := model.TemplatePreview{
-		ChallengeTemplate: template,
+		
 		DockerCommand:     h.generateDockerCommand(&template),
 		PortMapping:       h.generatePortMapping(&template),
 		EnvList:           h.generateEnvList(&template),
@@ -573,7 +578,7 @@ func (h *TemplateHandler) generateDockerCommand(template *model.ChallengeTemplat
 	}
 	
 	// 镜像
-	image := template.ImageConfig.ImageName
+	image := template.ImageConfig.Name
 	if template.ImageConfig.ImageTag != "" {
 		image += ":" + template.ImageConfig.ImageTag
 	}

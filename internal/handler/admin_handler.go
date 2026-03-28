@@ -116,7 +116,7 @@ func (h *adminHandler) CreateGame(c fiber.Ctx) error {
 		Title:         req.Title,
 		Description:   req.Description,
 		Mode:          req.Mode,
-		Status:        model.GameStatusDraft,
+		Status:        "draft",
 		RoundDuration: req.RoundDuration,
 		BreakDuration: req.BreakDuration,
 		TotalRounds:   req.TotalRounds,

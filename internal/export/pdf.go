@@ -46,13 +46,10 @@ func GenerateRankingPDF(rankings []model.Ranking) ([]byte, error) {
 	pdf.SetFont("simhei", "", 10)
 	for _, ranking := range rankings {
 		pdf.CellFormat(colWidths[0], 7, fmt.Sprintf("%d", ranking.Rank), "1", 0, "C", false, 0, "")
-		pdf.CellFormat(colWidths[1], 7, ranking.TeamName, "1", 0, "L", false, 0, "")
-		pdf.CellFormat(colWidths[2], 7, fmt.Sprintf("%.1f", ranking.Score), "1", 0, "C", false, 0, "")
-		pdf.CellFormat(colWidths[3], 7, fmt.Sprintf("%d", ranking.Attacks), "1", 0, "C", false, 0, "")
+		pdf.CellFormat(colWidths[1], 7, 		pdf.CellFormat(colWidths[2], 7, fmt.Sprintf("%.1f", 		pdf.CellFormat(colWidths[3], 7, fmt.Sprintf("%d", ranking.Attacks), "1", 0, "C", false, 0, "")
 		pdf.CellFormat(colWidths[4], 7, fmt.Sprintf("%d", ranking.Defenses), "1", 0, "C", false, 0, "")
 		pdf.CellFormat(colWidths[5], 7, fmt.Sprintf("%d", ranking.FirstBlood), "1", 0, "C", false, 0, "")
-		pdf.CellFormat(colWidths[6], 7, ranking.UpdatedAt.Format("01-02 15:04"), "1", 0, "C", false, 0, "")
-		pdf.Ln(-1)
+		pdf.CellFormat(colWidths[6], 7, 		pdf.Ln(-1)
 	}
 
 	// 生成PDF字节
@@ -105,9 +102,7 @@ func GenerateFullReport(rankings []model.Ranking, attacks []model.AttackLog) ([]
 	pdf.SetFont("simhei", "", 10)
 	for _, ranking := range rankings {
 		pdf.CellFormat(colWidths[0], 7, fmt.Sprintf("%d", ranking.Rank), "1", 0, "C", false, 0, "")
-		pdf.CellFormat(colWidths[1], 7, ranking.TeamName, "1", 0, "L", false, 0, "")
-		pdf.CellFormat(colWidths[2], 7, fmt.Sprintf("%.1f", ranking.Score), "1", 0, "C", false, 0, "")
-		pdf.CellFormat(colWidths[3], 7, fmt.Sprintf("%d", ranking.Attacks), "1", 0, "C", false, 0, "")
+		pdf.CellFormat(colWidths[1], 7, 		pdf.CellFormat(colWidths[2], 7, fmt.Sprintf("%.1f", 		pdf.CellFormat(colWidths[3], 7, fmt.Sprintf("%d", ranking.Attacks), "1", 0, "C", false, 0, "")
 		pdf.CellFormat(colWidths[4], 7, fmt.Sprintf("%d", ranking.Defenses), "1", 0, "C", false, 0, "")
 		pdf.CellFormat(colWidths[5], 7, fmt.Sprintf("%d", ranking.FirstBlood), "1", 0, "C", false, 0, "")
 		pdf.Ln(-1)
