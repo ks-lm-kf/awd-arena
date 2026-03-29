@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import {
   Card, Tabs, Table, Button, Space, Modal, Form, Input, Select, InputNumber,
@@ -14,6 +14,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { ColumnsType } from 'antd/es/table'
 import type { Game, Team, Challenge, GameStatus, GameMode, Difficulty } from '@/types'
 import { gameApi } from '@/api/game'
+import { get } from '@/api/client'
 import { adminApi } from '@/api/admin'
 import { teamApi } from '@/api/team'
 import { challengeApi } from '@/api/challenge'
@@ -428,9 +429,7 @@ export default function GameDetail() {
           tab={<span><HistoryOutlined /> 轮次记录</span>}
           key="rounds"
         >
-          <Card>
-            <Empty description="轮次记录功能开发中..." />
-          </Card>
+          <RoundRecordsTab gameId={gameId} />
         </TabPane>
       </Tabs>
 
@@ -663,6 +662,119 @@ export default function GameDetail() {
         </Form>
       </Modal>
     </div>
+  )
+}
+
+
+// Round Records Tab Component
+function RoundRecordsTab({ gameId }: { gameId: number }) {
+  const [rounds, setRounds] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [expandedRound, setExpandedRound] = useState<number | null>(null)
+
+  useEffect(() => {
+    const fetchRounds = async () => {
+      setLoading(true)
+      try {
+        const resp = await get<any[]>(`/games/${gameId}/rounds`)
+        setRounds(Array.isArray(resp) ? resp : [])
+      } catch {
+        setRounds([])
+      }
+      setLoading(false)
+    }
+    fetchRounds()
+    // Poll every 30s for updates
+    const interval = setInterval(fetchRounds, 30000)
+    return () => clearInterval(interval)
+  }, [gameId])
+
+  // Also fetch flag submissions for expanded round
+  const [flagSubmissions, setFlagSubmissions] = useState<Record<number, any[]>>({})
+
+  const fetchRoundDetails = async (round: number) => {
+    try {
+      const resp = await get<any[]>(`/games/${gameId}/flags/history?round=${round}`)
+      setFlagSubmissions(prev => ({ ...prev, [round]: Array.isArray(resp) ? resp : [] }))
+    } catch {
+      setFlagSubmissions(prev => ({ ...prev, [round]: [] }))
+    }
+  }
+
+  const roundColumns: ColumnsType<any> = [
+    { title: '轮次', dataIndex: 'round', width: 80, render: (r: number) => `第 ${r} 轮` },
+    { title: '阶段', dataIndex: 'phase', width: 100, render: (p: string) => {
+      const phaseMap: Record<string, { color: string; label: string }> = {
+        running: { color: 'green', label: '进行中' },
+        break: { color: 'orange', label: '休息中' },
+        finished: { color: 'blue', label: '已结束' },
+        preparation: { color: 'default', label: '准备中' },
+      }
+      const cfg = phaseMap[p] || { color: 'default', label: p }
+      return <Tag color={cfg.color}>{cfg.label}</Tag>
+    }},
+    { title: '开始时间', dataIndex: 'start_time', width: 160, render: (t: string) => t ? formatTime(t) : '-' },
+    { title: '结束时间', dataIndex: 'end_time', width: 160, render: (t: string) => t ? formatTime(t) : '-' },
+    { title: '提交数', dataIndex: 'submission_count', width: 80, render: (c: number) => c ?? '-' },
+    {
+      title: '操作', width: 80,
+      render: (_, r) => (
+        <Button size="small" type="link" onClick={() => {
+          if (expandedRound === r.round) {
+            setExpandedRound(null)
+          } else {
+            setExpandedRound(r.round)
+            fetchRoundDetails(r.round)
+          }
+        }}>
+          {expandedRound === r.round ? '收起' : '详情'}
+        </Button>
+      ),
+    },
+  ]
+
+  return (
+    <Card>
+      {loading ? (
+        <div className="flex items-center justify-center h-32"><Spin /></div>
+      ) : rounds.length === 0 ? (
+        <Empty description="暂无轮次记录" />
+      ) : (
+        <div>
+          <Table
+            columns={roundColumns}
+            dataSource={rounds}
+            rowKey="round"
+            pagination={false}
+            size="small"
+          />
+          {expandedRound !== null && (
+            <Card title={`第 ${expandedRound} 轮 - Flag 提交记录`} size="small" style={{ marginTop: 16 }}>
+              {flagSubmissions[expandedRound] === undefined ? (
+                <div className="flex items-center justify-center h-20"><Spin /></div>
+              ) : flagSubmissions[expandedRound].length === 0 ? (
+                <Empty description="本轮无提交记录" />
+              ) : (
+                <Table
+                  columns={[
+                    { title: '攻击方', dataIndex: 'attacker_team_name', width: 120 },
+                    { title: '目标方', dataIndex: 'target_team_name', width: 120 },
+                    { title: 'Flag', dataIndex: 'flag_value', ellipsis: true },
+                    { title: '结果', dataIndex: 'is_correct', width: 80, render: (v: boolean) => v ? <Tag color="success">正确</Tag> : <Tag color="error">错误</Tag> },
+                    { title: '得分', dataIndex: 'points_earned', width: 80 },
+                    { title: '提交时间', dataIndex: 'submitted_at', width: 160, render: (t: string) => formatTime(t) },
+                  ]}
+                  dataSource={flagSubmissions[expandedRound]}
+                  rowKey="id"
+                  pagination={false}
+                  size="small"
+                />
+              )}
+            </Card>
+          )}
+        </div>
+      )}
+    </Card>
   )
 }
 

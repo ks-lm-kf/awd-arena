@@ -62,3 +62,51 @@
 ## Build Status
 - Go backend: Builds successfully
 - React frontend: Builds successfully (vite + tsc)
+
+## 2026-03-29 Completion Work
+
+### 1. E2E Test Script (Complete)
+- Written to `/tmp/e2e_test.py`
+- Tests 13 endpoints: admin login, create game, create teams, create challenge, add teams to game, start game, check containers, player login, my-machines, submit flag, rankings, stop game, container cleanup
+- All 13 tests pass ✅
+- Uses unique team names (timestamp-based) to avoid collision on re-runs
+- Container provisioning confirmed: 2 containers created for 2 teams × 1 challenge
+
+### 2. Frontend Build (Pass)
+- `npm run build` succeeds with 0 errors
+- Output: 3183 modules, built in ~6s
+- Bundle size: ~1.5MB (antd + echarts)
+
+### 3. Database Migration (Fixed)
+- `database.go` AutoMigrate was missing: ServiceHealth, ScoreAdjustment, TargetService, ChallengeTemplate, AttackLog
+- All models now registered in `internal/database/database.go`
+- `cmd/server/main.go` has supplementary AutoMigrate for ServiceHealth
+- DB tables verified: 14 tables present and correct
+
+### 4. Binary Rebuild & Deployment
+- Rebuilt binary from latest source (`go build -o awd-arena ./cmd/server/`)
+- Deployed to `/opt/awd-arena/bin/server`
+- Restarted via `systemctl restart awd-arena`
+- Server running on port 8080 with 171 handlers
+
+### 5. API Verification Summary
+| Endpoint | Status |
+|----------|--------|
+| POST /api/v1/auth/login | ✅ |
+| POST /api/v1/auth/register | ✅ |
+| POST /api/v1/games | ✅ |
+| POST /api/v1/judge/teams | ✅ |
+| POST /api/v1/games/:id/challenges | ✅ |
+| POST /api/v1/judge/games/:id/teams | ✅ |
+| POST /api/v1/games/:id/start | ✅ |
+| GET /api/v1/games/:id/containers | ✅ |
+| GET /api/v1/games/:id/my-machines | ✅ |
+| POST /api/v1/games/:id/flags/submit | ✅ |
+| GET /api/v1/games/:id/rankings | ✅ |
+| POST /api/v1/games/:id/stop | ✅ |
+
+### Known Issues
+- `my-machines` returns empty for users without team_id (admin/player without team assignment) - expected behavior, not a bug
+- Container provisioning is async; containers may not be visible for ~3-5 seconds after game start
+- No integration test script existed at `/tmp/integration_test.py`
+

@@ -650,7 +650,8 @@ func (h *containerHandler) List(c fiber.Ctx) error {
 }
 
 func (h *containerHandler) Restart(c fiber.Ctx) error {
-	if err := h.svc.RestartContainer(c.Context(), parseID(c.Params("id")), parseID(c.Params("cid"))); err != nil {
+	operatorID, _ := c.Locals("user_id").(int64)
+	if err := h.svc.RestartContainer(c.Context(), parseID(c.Params("id")), parseID(c.Params("cid")), operatorID); err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok"})

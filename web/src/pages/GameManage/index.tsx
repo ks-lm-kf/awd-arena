@@ -47,7 +47,7 @@ export default function GameManage() {
       switch (action) {
         case '开始': return gameApi.start(id)
         case '暂停': return gameApi.pause(id)
-        case '继续': return gameApi.start(id)
+        case '继续': return gameApi.resume(id)
         case '结束': return gameApi.stop(id)
         case '重置': return gameApi.reset(id)
         default: return Promise.resolve()
@@ -78,14 +78,22 @@ export default function GameManage() {
           <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/games/${r.id}`)}>详情</Button>
           {r.status === 'draft' && <Button size="small" icon={<EditOutlined />} onClick={() => { setEditing(r); form.setFieldsValue(r); setModalOpen(true) }}>编辑</Button>}
           {r.status === 'draft' && (
-            <Popconfirm title="确定开始比赛？" onConfirm={() => actionMutation.mutate({ action: '开始', id: r.id })}>
+            <Popconfirm title="确定开始比赛？" description="比赛开始后将自动创建容器" onConfirm={() => actionMutation.mutate({ action: '开始', id: r.id })}>
               <Button size="small" type="primary" icon={<PlayCircleOutlined />}>开始</Button>
             </Popconfirm>
           )}
-          {r.status === 'running' && <Button size="small" icon={<PauseCircleOutlined />} onClick={() => actionMutation.mutate({ action: '暂停', id: r.id })}>暂停</Button>}
-          {r.status === 'paused' && <Button size="small" type="primary" icon={<PlayCircleOutlined />} onClick={() => actionMutation.mutate({ action: '继续', id: r.id })}>继续</Button>}
-          {(r.status === 'running' || r.status === 'paused') && (
-            <Popconfirm title="确定结束比赛？" onConfirm={() => actionMutation.mutate({ action: '结束', id: r.id })}>
+          {(r.status === 'running' || r.status === 'active') && (
+            <Popconfirm title="确定暂停比赛？" onConfirm={() => actionMutation.mutate({ action: '暂停', id: r.id })}>
+              <Button size="small" icon={<PauseCircleOutlined />}>暂停</Button>
+            </Popconfirm>
+          )}
+          {r.status === 'paused' && (
+            <Popconfirm title="确定继续比赛？" onConfirm={() => actionMutation.mutate({ action: '继续', id: r.id })}>
+              <Button size="small" type="primary" icon={<PlayCircleOutlined />}>继续</Button>
+            </Popconfirm>
+          )}
+          {(r.status === 'running' || r.status === 'paused' || r.status === 'active') && (
+            <Popconfirm title="确定结束比赛？" description="结束后不可恢复，请谨慎操作！" onConfirm={() => actionMutation.mutate({ action: '结束', id: r.id })}>
               <Button size="small" danger icon={<StopOutlined />}>结束</Button>
             </Popconfirm>
           )}
@@ -94,9 +102,11 @@ export default function GameManage() {
               <Button size="small" danger icon={<DeleteOutlined />} />
             </Popconfirm>
           )}
-          <Popconfirm title="确定重置？数据将丢失！" onConfirm={() => actionMutation.mutate({ action: '重置', id: r.id })}>
-            <Button size="small" icon={<ReloadOutlined />}>重置</Button>
-          </Popconfirm>
+          {(r.status === 'finished' || r.status === 'draft') && (
+            <Popconfirm title="确定重置？所有比赛数据将丢失！" onConfirm={() => actionMutation.mutate({ action: '重置', id: r.id })}>
+              <Button size="small" icon={<ReloadOutlined />}>重置</Button>
+            </Popconfirm>
+          )}
         </Space>
       ),
     },
@@ -147,4 +157,3 @@ export default function GameManage() {
     </div>
   )
 }
-

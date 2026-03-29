@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Card, Row, Col, Statistic, Tag, Typography, Button, Table, Progress, Space, Tooltip, message } from 'antd'
+import { Card, Row, Col, Statistic, Tag, Typography, Button, Table, Progress, Space, Tooltip, message, Popconfirm } from 'antd'
 import {
   PlayCircleOutlined, PauseCircleOutlined, StopOutlined,
   TrophyOutlined, ThunderboltOutlined, TeamOutlined,
@@ -76,10 +76,12 @@ export default function DashboardPage() {
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [activeGame])
 
-  const controlGame = async (id: number, action: 'start' | 'pause' | 'stop') => {
+  const controlGame = async (id: number, action: 'start' | 'pause' | 'resume' | 'stop') => {
     try {
-      await (gameApi as any)[action](id)
-      message.success(`${action === 'start' ? '启动' : action === 'pause' ? '暂停' : '停止'}成功`)
+      const apiFn = action === 'resume' ? gameApi.resume : (gameApi as any)[action]
+      await apiFn(id)
+      const labels: Record<string, string> = { start: '启动', pause: '暂停', resume: '继续', stop: '停止' }
+      message.success(`${labels[action]}成功`)
       loadData()
     } catch (err: any) {
       message.error(err?.response?.data?.message || '操作失败')
@@ -114,8 +116,12 @@ export default function DashboardPage() {
                 <Space>
                   {activeGame.status === 'draft' && <Button type="primary" icon={<RocketOutlined />} onClick={() => controlGame(activeGame.id, 'start')}>启动</Button>}
                   {activeGame.status === 'running' && <Button icon={<PauseCircleOutlined />} onClick={() => controlGame(activeGame.id, 'pause')}>暂停</Button>}
-                  {activeGame.status === 'paused' && <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => controlGame(activeGame.id, 'start')}>继续</Button>}
-                  {activeGame.status !== 'finished' && <Button danger icon={<StopOutlined />} onClick={() => controlGame(activeGame.id, 'stop')}>停止</Button>}
+                  {activeGame.status === 'paused' && <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => controlGame(activeGame.id, 'resume')}>继续</Button>}
+                  {activeGame.status !== 'finished' && (
+                    <Popconfirm title="确认停止比赛？" description="停止后比赛将结束，请谨慎操作！" onConfirm={() => controlGame(activeGame.id, 'stop')}>
+                      <Button danger icon={<StopOutlined />}>停止</Button>
+                    </Popconfirm>
+                  )}
                 </Space>
               )}
             </div>

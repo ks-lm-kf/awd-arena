@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/awd-platform/awd-arena/internal/container"
 	"github.com/awd-platform/awd-arena/internal/database"
@@ -73,14 +74,14 @@ type ContainerInfo struct {
 
 // ContainerStatsInfo represents container stats with team/challenge info.
 type ContainerStatsInfo struct {
-	ContainerID string  `json:"container_id"`
-	TeamID      int64   `json:"team_id"`
-	ChallengeID int64   `json:"challenge_id"`
-	IPAddress   string  `json:"ip_address"`
-	Status      string  `json:"status"`
-	CPUPercent  float64 `json:"cpu_percent"`
-	MemoryBytes uint64  `json:"memory_bytes"`
-	NetworkBytes uint64 `json:"network_bytes"`
+	ContainerID  string  `json:"container_id"`
+	TeamID       int64   `json:"team_id"`
+	ChallengeID  int64   `json:"challenge_id"`
+	IPAddress    string  `json:"ip_address"`
+	Status       string  `json:"status"`
+	CPUPercent   float64 `json:"cpu_percent"`
+	MemoryBytes  uint64  `json:"memory_bytes"`
+	NetworkBytes uint64  `json:"network_bytes"`
 }
 
 // NewContainerService creates a new ContainerService instance.
@@ -89,14 +90,12 @@ func NewContainerService() *ContainerService {
 }
 
 // ProvisionContainers creates all containers for a game's teams and challenges.
-// Called when a game starts.
 func (s *ContainerService) ProvisionContainers(ctx context.Context, gameID int64) error {
 	db := database.GetDB()
 	if db == nil {
 		return errors.New("database not initialized")
 	}
 
-	// Get teams for this game via GameTeam table
 	var gameTeams []model.GameTeam
 	if err := db.Where("game_id = ?", gameID).Find(&gameTeams).Error; err != nil {
 		return err
@@ -112,7 +111,6 @@ func (s *ContainerService) ProvisionContainers(ctx context.Context, gameID int64
 		}
 	}
 
-	// Get all challenges for this game
 	var challenges []model.Challenge
 	if err := db.Where("game_id = ?", gameID).Find(&challenges).Error; err != nil {
 		return err
@@ -133,7 +131,6 @@ func (s *ContainerService) ProvisionContainers(ctx context.Context, gameID int64
 		return err
 	}
 
-	// Create networks for each team
 	for _, team := range teams {
 		if _, err := netMgr.CreateTeamNetwork(ctx, team.ID); err != nil {
 			logger.Error("create team network failed", "team", team.ID, "error", err)
@@ -141,7 +138,6 @@ func (s *ContainerService) ProvisionContainers(ctx context.Context, gameID int64
 		}
 	}
 
-	// Create containers: each team x each challenge
 	hostPortBase := 31000
 	for _, team := range teams {
 		netName, _ := netMgr.GetTeamNetwork(team.ID)
@@ -160,7 +156,6 @@ func (s *ContainerService) ProvisionContainers(ctx context.Context, gameID int64
 		}
 	}
 
-	// Setup cross-team isolation
 	var isoTeamIDs []int64
 	for _, t := range teams {
 		isoTeamIDs = append(teamIDs, t.ID)
@@ -183,12 +178,10 @@ func (s *ContainerService) TeardownContainers(ctx context.Context, gameID int64)
 		return errors.New("database not initialized")
 	}
 
-	// Cleanup all containers
 	if err := mgr.CleanupAll(ctx, gameID); err != nil {
 		return err
 	}
 
-	// Get unique team IDs and remove their networks
 	var teamIDs []int64
 	db.Model(&model.TeamContainer{}).Where("game_id = ?", gameID).Distinct("team_id").Pluck("team_id", &teamIDs)
 
@@ -230,8 +223,8 @@ func (s *ContainerService) RestartAll(ctx context.Context, gameID int64) error {
 	return mgr.BulkRestart(ctx, gameID)
 }
 
-// RestartContainer restarts a specific container.
-func (s *ContainerService) RestartContainer(ctx context.Context, gameID, containerID int64) error {
+// RestartContainer restarts a specific container and deducts score from the team.
+func (s *ContainerService) RestartContainer(ctx context.Context, gameID, containerID, operatorID int64) error {
 	mgr, err := getManager()
 	if err != nil {
 		return err
@@ -246,7 +239,34 @@ func (s *ContainerService) RestartContainer(ctx context.Context, gameID, contain
 	if err := db.Where("game_id = ? AND id = ?", gameID, containerID).First(&tc).Error; err != nil {
 		return errors.New("container not found")
 	}
-	return mgr.RestartContainer(ctx, tc.ContainerID)
+
+	// Restart the container
+	if err := mgr.RestartContainer(ctx, tc.ContainerID); err != nil {
+		return err
+	}
+
+	// Get current round from game model
+	currentRound := 0
+	var game model.Game
+	if err := db.Select("current_round").Where("id = ?", gameID).First(&game).Error; err == nil {
+		currentRound = game.CurrentRound
+	}
+
+	// Deduct score: -50 points for container restart
+	adjustment := model.ScoreAdjustment{
+		GameID:      gameID,
+		TeamID:      tc.TeamID,
+		AdjustValue: -50,
+		Reason:      "容器重启",
+		OperatorID:  operatorID,
+		Round:       currentRound,
+		CreatedAt:   time.Now(),
+	}
+	if err := db.Create(&adjustment).Error; err != nil {
+		logger.Error("failed to create score adjustment for container restart", "error", err)
+	}
+
+	return nil
 }
 
 // GetContainers returns container list for a game with team and challenge names.
@@ -261,7 +281,6 @@ func (s *ContainerService) GetContainers(ctx context.Context, gameID int64) ([]C
 		return nil, err
 	}
 
-	// 预加载所有需要的 teams 和 challenges
 	teamIDs := make([]int64, len(containers))
 	challengeIDs := make([]int64, len(containers))
 	for i, c := range containers {
@@ -269,7 +288,6 @@ func (s *ContainerService) GetContainers(ctx context.Context, gameID int64) ([]C
 		challengeIDs[i] = c.ChallengeID
 	}
 
-	// 查询队伍名称
 	var teams []model.Team
 	teamMap := make(map[int64]string)
 	if err := db.Where("id IN ?", teamIDs).Find(&teams).Error; err == nil {
@@ -278,7 +296,6 @@ func (s *ContainerService) GetContainers(ctx context.Context, gameID int64) ([]C
 		}
 	}
 
-	// 查询靶机名称
 	var challenges []model.Challenge
 	challengeMap := make(map[int64]string)
 	if err := db.Where("id IN ?", challengeIDs).Find(&challenges).Error; err == nil {
@@ -318,7 +335,6 @@ func (s *ContainerService) GetStats(ctx context.Context, gameID int64) ([]Contai
 
 	mgr, err := getManager()
 	if err != nil {
-		// Return basic info without stats
 		result := make([]ContainerStatsInfo, len(containers))
 		for i, c := range containers {
 			result[i] = ContainerStatsInfo{
@@ -337,7 +353,6 @@ func (s *ContainerService) GetStats(ctx context.Context, gameID int64) ([]Contai
 		logger.Error("monitor stats failed", "error", err)
 	}
 
-	// Merge stats with container info
 	statsMap := make(map[string]*container.ContainerStats)
 	if stats != nil {
 		for i := range stats {
@@ -354,13 +369,12 @@ func (s *ContainerService) GetStats(ctx context.Context, gameID int64) ([]Contai
 			IPAddress:   c.IPAddress,
 			Status:      c.Status,
 		}
-		if s, ok := statsMap[c.ContainerID]; ok {
-			info.CPUPercent = s.CPU
-			info.MemoryBytes = s.Memory
-			info.NetworkBytes = s.Network
+		if st, ok := statsMap[c.ContainerID]; ok {
+			info.CPUPercent = st.CPU
+			info.MemoryBytes = st.Memory
+			info.NetworkBytes = st.Network
 		}
 		result[i] = info
 	}
 	return result, nil
 }
-

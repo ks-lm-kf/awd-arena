@@ -37,6 +37,7 @@ export function formatPercent(value: number): string {
 export function statusColor(status: string): string {
   const map: Record<string, string> = {
     running: '#22c55e',
+    active: '#22c55e',
     draft: '#94a3b8',
     paused: '#eab308',
     finished: '#6366f1',
@@ -50,6 +51,7 @@ export function statusColor(status: string): string {
 export function statusLabel(status: string): string {
   const map: Record<string, string> = {
     running: '进行中',
+    active: '进行中',
     draft: '草稿',
     paused: '已暂停',
     finished: '已结束',

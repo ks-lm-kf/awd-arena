@@ -5,6 +5,7 @@ import (
 
 	"github.com/awd-platform/awd-arena/internal/database"
 	"github.com/awd-platform/awd-arena/internal/model"
+	"github.com/awd-platform/awd-arena/pkg/logger"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -16,10 +17,10 @@ func init() {
 }
 
 type AdjustScoreRequest struct {
-	GameID      int64  `+"`json:"game_id\"`"+`
-	TeamID      int64  `+"`json:"team_id\"`"+`
-	AdjustValue int    `+"`json:"adjust_value\"`"+`
-	Reason      string `+"`json:"reason\"`"+`
+	GameID      int64  `json:"game_id"`
+	TeamID      int64  `json:"team_id"`
+	AdjustValue int    `json:"adjust_value"`
+	Reason      string `json:"reason"`
 }
 
 func (h *scoreHandler) AdjustScore(c fiber.Ctx) error {
@@ -58,14 +59,39 @@ func (h *scoreHandler) GetScoreAdjustments(c fiber.Ctx) error {
 }
 
 func (h *scoreHandler) GetMyContainers(c fiber.Ctx) error {
-	userID, _ := c.Locals("user_id").(int64)
+	// 添加 panic 恢复
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("GetMyContainers panic", "error", r)
+		}
+	}()
+
+	// 获取 user_id - 注意 Fiber v3 的 Locals 返回 any
+	userIDVal := c.Locals("user_id")
+	logger.Info("GetMyContainers", "user_id_raw", userIDVal, "type", userIDVal)
+	
+	var userID int64
+	switch v := userIDVal.(type) {
+	case int64:
+		userID = v
+	case int:
+		userID = int64(v)
+	case float64:
+		userID = int64(v)
+	default:
+		logger.Warn("GetMyContainers: invalid user_id type", "value", userIDVal)
+		return c.Status(401).JSON(fiber.Map{"error": "Unauthorized - invalid user_id"})
+	}
+	
 	if userID == 0 {
 		return c.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
 	}
+	
 	gameID, err := strconv.ParseInt(c.Params("id"), 10, 64)
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid game ID"})
 	}
+	
 	db := database.GetDB()
 	if db == nil {
 		return c.Status(500).JSON(fiber.Map{"error": "database not available"})
@@ -75,7 +101,13 @@ func (h *scoreHandler) GetMyContainers(c fiber.Ctx) error {
 	if err := db.First(&user, userID).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "user not found"})
 	}
-	if user.TeamID == nil || *user.TeamID == 0 {
+	
+	logger.Info("GetMyContainers", "user_team_id", user.TeamID, "game_id", gameID)
+	
+	if user.TeamID == nil {
+		return c.JSON(fiber.Map{"code": 0, "data": []interface{}{}})
+	}
+	if *user.TeamID == 0 {
 		return c.JSON(fiber.Map{"code": 0, "data": []interface{}{}})
 	}
 
@@ -88,14 +120,14 @@ func (h *scoreHandler) GetMyContainers(c fiber.Ctx) error {
 	for _, ch := range challenges { challengeMap[ch.ID] = ch.Name }
 
 	type CI struct {
-		ID            int64       `+"`json:"id\"`"+`
-		ContainerID   string      `+"`json:"container_id\"`"+`
-		IPAddress     string      `+"`json:"ip_address\"`"+`
-		PortMapping   string      `+"`json:"port_mapping\"`"+`
-		SSHUser       string      `+"`json:"ssh_user\"`"+`
-		SSHPassword   string      `+"`json:"ssh_password\"`"+`
-		ChallengeName string      `+"`json:"challenge_name\"`"+`
-		Status        string      `+"`json:"status\"`"+`
+		ID            int64  `json:"id"`
+		ContainerID   string `json:"container_id"`
+		IPAddress     string `json:"ip_address"`
+		PortMapping   string `json:"port_mapping"`
+		SSHUser       string `json:"ssh_user"`
+		SSHPassword   string `json:"ssh_password"`
+		ChallengeName string `json:"challenge_name"`
+		Status        string `json:"status"`
 	}
 
 	result := make([]CI, 0, len(containers))
@@ -111,4 +143,3 @@ func (h *scoreHandler) GetMyContainers(c fiber.Ctx) error {
 	}
 	return c.JSON(fiber.Map{"code": 0, "data": result})
 }
-

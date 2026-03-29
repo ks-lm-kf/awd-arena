@@ -111,7 +111,7 @@ export default function AdminGameManage() {
       <div className="flex items-center justify-between">
         <Title level={3} style={{ margin: 0 }}>🎮 裁判 - 竞赛管理</Title>
         <Space>
-          <Button icon={<HistoryOutlined />} onClick={() => message.info('操作日志功能开发中')}>操作日志</Button>
+          <Button icon={<HistoryOutlined />} disabled>操作日志</Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setModalOpen(true) }}>创建竞赛</Button>
         </Space>
       </div>
