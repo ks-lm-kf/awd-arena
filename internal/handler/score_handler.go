@@ -16,10 +16,10 @@ func init() {
 }
 
 type AdjustScoreRequest struct {
-	GameID      int64  `+"`json:\"game_id\"`"+`
-	TeamID      int64  `+"`json:\"team_id\"`"+`
-	AdjustValue int    `+"`json:\"adjust_value\"`"+`
-	Reason      string `+"`json:\"reason\"`"+`
+	GameID      int64  `+"`json:"game_id\"`"+`
+	TeamID      int64  `+"`json:"team_id\"`"+`
+	AdjustValue int    `+"`json:"adjust_value\"`"+`
+	Reason      string `+"`json:"reason\"`"+`
 }
 
 func (h *scoreHandler) AdjustScore(c fiber.Ctx) error {
@@ -88,14 +88,14 @@ func (h *scoreHandler) GetMyContainers(c fiber.Ctx) error {
 	for _, ch := range challenges { challengeMap[ch.ID] = ch.Name }
 
 	type CI struct {
-		ID            int64       `+"`json:\"id\"`"+`
-		ContainerID   string      `+"`json:\"container_id\"`"+`
-		IPAddress     string      `+"`json:\"ip_address\"`"+`
-		PortMapping   string      `+"`json:\"port_mapping\"`"+`
-		SSHUser       string      `+"`json:\"ssh_user\"`"+`
-		SSHPassword   string      `+"`json:\"ssh_password\"`"+`
-		ChallengeName string      `+"`json:\"challenge_name\"`"+`
-		Status        string      `+"`json:\"status\"`"+`
+		ID            int64       `+"`json:"id\"`"+`
+		ContainerID   string      `+"`json:"container_id\"`"+`
+		IPAddress     string      `+"`json:"ip_address\"`"+`
+		PortMapping   string      `+"`json:"port_mapping\"`"+`
+		SSHUser       string      `+"`json:"ssh_user\"`"+`
+		SSHPassword   string      `+"`json:"ssh_password\"`"+`
+		ChallengeName string      `+"`json:"challenge_name\"`"+`
+		Status        string      `+"`json:"status\"`"+`
 	}
 
 	result := make([]CI, 0, len(containers))
@@ -111,3 +111,4 @@ func (h *scoreHandler) GetMyContainers(c fiber.Ctx) error {
 	}
 	return c.JSON(fiber.Map{"code": 0, "data": result})
 }
+
