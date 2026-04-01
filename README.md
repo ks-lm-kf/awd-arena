@@ -125,7 +125,7 @@ tail -f log/server.log
 
 启动后访问：**http://localhost:8080**
 
-默认管理员：`admin` / `admin123`
+默认管理员：`admin` / `Admin1234`
 
 > ⚠️ 首次登录后请立即在「系统设置」中修改密码！
 
@@ -329,7 +329,7 @@ awd-arena/
 
 **Q: 忘记管理员密码？**
 ```bash
-sqlite3 data/awd.db "UPDATE users SET password='$(go run pkg/crypto/main.go admin123)' WHERE username='admin';"
+sqlite3 data/awd.db "UPDATE users SET password='$(go run pkg/crypto/main.go Admin1234)' WHERE username='admin';"
 ```
 
 **Q: 容器无法启动？**
