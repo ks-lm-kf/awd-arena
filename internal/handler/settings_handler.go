@@ -40,6 +40,7 @@ func (h *settingsHandler) GetSettings(c fiber.Ctx) error {
 	settings := defaultSettings()
 
 	if db != nil {
+		db.AutoMigrate(&SystemSettings{})
 		var s SystemSettings
 		if err := db.First(&s).Error; err == nil {
 			settings = &s

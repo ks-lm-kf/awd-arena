@@ -46,8 +46,15 @@ func (s *TeamService) ListTeams(ctx context.Context) ([]*model.Team, error) {
 		return nil, errors.New("database not initialized")
 	}
 	var teams []*model.Team
-	err := db.Order("score desc").Find(&teams).Error
-	return teams, err
+	if err := db.Order("score desc").Find(&teams).Error; err != nil {
+		return nil, err
+	}
+	for _, team := range teams {
+		var count int64
+		db.Model(&model.User{}).Where("team_id = ?", team.ID).Count(&count)
+		team.MemberCount = int(count)
+	}
+	return teams, nil
 }
 
 func (s *TeamService) GetTeamMembers(ctx context.Context, teamID int64) ([]model.User, error) {

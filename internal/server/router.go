@@ -20,6 +20,10 @@ func RegisterRoutes(app *fiber.App) {
 	auth.Post("/register", handler.AuthHandler.Register)
 	auth.Post("/refresh", middleware.JWTAuth(), handler.AuthHandler.RefreshToken)
 
+	// Password change
+	auth.Put("/change-password", middleware.JWTAuth(), handler.AuthHandler.ChangePassword)
+	auth.Post("/password", middleware.JWTAuth(), handler.AuthHandler.ChangePassword)
+
 	// Admin routes - User management
 	admin := v1.Group("/admin", middleware.JWTAuth(), middleware.RequireRole(model.RoleAdmin))
 	admin.Get("/users", handler.UserHandler.List)

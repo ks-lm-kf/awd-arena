@@ -9,6 +9,7 @@ type Team struct {
     Description string    `json:"description"`
     AvatarURL   string    `json:"avatar_url"`
     Score       float64   `json:"score" gorm:"default:0"`
+    MemberCount int       `json:"member_count" gorm:"-"`
     CreatedAt   time.Time `json:"created_at"`
 }
 

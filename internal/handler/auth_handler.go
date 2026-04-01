@@ -119,9 +119,20 @@ func (h *authHandler) Logout(c fiber.Ctx) error {
 
 // ChangePassword handles password change requests
 func (h *authHandler) ChangePassword(c fiber.Ctx) error {
-	userID, ok := c.Locals("user_id").(int64)
-	if !ok {
-		return c.Status(401).JSON(fiber.Map{"code": 401, "message": "unauthorized"})
+	// Try to get user_id from JWTAuth middleware first, fallback to manual token validation
+	var userID int64
+	if uidRaw := c.Locals("user_id"); uidRaw != nil {
+		if id, ok := uidRaw.(int64); ok {
+			userID = id
+		}
+	}
+	if userID == 0 {
+		// Fallback: manually validate token
+		uid, err := middleware.ValidateToken(c, middleware.GetJWTSecret())
+		if err != nil {
+			return c.Status(401).JSON(fiber.Map{"code": 401, "message": "unauthorized"})
+		}
+		userID = uid
 	}
 
 	var req struct {
