@@ -52,7 +52,11 @@ func (n *NetworkManager) CreateTeamNetwork(ctx context.Context, teamID int64) (s
 
 	networkID, err := n.client.CreateNetwork(ctx, netName, teamSubnet, gateway, true)
 	if err != nil {
-		return "", fmt.Errorf("create network for team %d: %w", teamID, err)
+		// Network already exists (e.g. after restart) - still track it by name
+		n.teamNets[teamID] = netName
+		n.netIDs[netName] = netName
+		logger.Info("team network already exists, re-using", "team", teamID, "network", netName)
+		return netName, nil
 	}
 
 	n.teamNets[teamID] = netName

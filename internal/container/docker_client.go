@@ -68,7 +68,7 @@ func (d *DockerClientImpl) CreateContainer(ctx context.Context, opts CreateOptio
 		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
 		SecurityOpt:   []string{"no-new-privileges:true"},
 		CapDrop:       []string{"ALL"},
-		CapAdd:        []string{"NET_BIND_SERVICE"},
+		CapAdd:        []string{"NET_BIND_SERVICE", "CHOWN", "SETUID", "SETGID", "DAC_OVERRIDE"},
 			}
 
 	networkingConfig := &network.NetworkingConfig{}

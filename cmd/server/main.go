@@ -72,6 +72,22 @@ func main() {
 	}
 	log.Info("engine callbacks initialized")
 
+	// Auto-recover: re-provision containers for running games
+	go func() {
+		var runningGames []model.Game
+		if err := db.Where("status = ?", "running").Find(&runningGames).Error; err == nil {
+			for _, game := range runningGames {
+				log.Info("re-provisioning containers for running game", "game_id", game.ID, "title", game.Title)
+				csvc := service.NewContainerService()
+				if err := csvc.ProvisionContainers(context.Background(), game.ID); err != nil {
+					log.Error("auto-recovery provisioning failed", "game_id", game.ID, "error", err)
+				} else {
+					log.Info("auto-recovery provisioning complete", "game_id", game.ID)
+				}
+			}
+		}
+	}()
+
 	srv := server.New(cfg)
 
 	ctx, cancel := context.WithCancel(context.Background())
