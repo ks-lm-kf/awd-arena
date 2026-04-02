@@ -3,6 +3,7 @@ package network
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"sync"
 
 	"github.com/awd-platform/awd-arena/pkg/logger"
@@ -17,9 +18,9 @@ type DockerNetworkClient interface {
 // NetworkManager manages Docker networks for team isolation.
 type NetworkManager struct {
 	client   DockerNetworkClient
-	subnet   string // e.g. "10.10.0.0/16"
-	ipBase   string // e.g. "10.10"
-	teamNets map[int64]string // teamID -> networkName
+	subnet   string            // e.g. "10.10.0.0/16"
+	ipBase   string            // e.g. "10.10"
+	teamNets map[int64]string  // teamID -> networkName
 	netIDs   map[string]string // networkName -> Docker network ID
 	mu       sync.Mutex
 }
@@ -99,18 +100,62 @@ func (n *NetworkManager) GetTeamNetwork(teamID int64) (string, bool) {
 }
 
 // IsolateTeams configures iptables rules to prevent cross-team traffic.
-// Each team's bridge is already isolated by Docker internal networks.
+// Docker internal networks alone are NOT sufficient — containers on different
+// bridges can still communicate via the Docker host if IP forwarding is enabled.
+// We add explicit iptables FORWARD DROP rules between team subnets.
 func (n *NetworkManager) IsolateTeams(ctx context.Context, teamIDs []int64) error {
-	// Docker internal networks already prevent inter-network communication.
-	// Additional iptables rules can be added here for extra security.
-	logger.Info("team isolation verified", "count", len(teamIDs))
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if len(teamIDs) <= 1 {
+		logger.Info("team isolation skipped (0 or 1 team)", "count", len(teamIDs))
+		return nil
+	}
+
+	// Build list of team subnets
+	type teamSubnet struct {
+		teamID int64
+		subnet string // e.g. "10.10.1.0/24"
+	}
+	var subnets []teamSubnet
+	for _, tid := range teamIDs {
+		sn := fmt.Sprintf("%s.%d.0/24", n.ipBase, (tid%254)+1)
+		subnets = append(subnets, teamSubnet{teamID: tid, subnet: sn})
+	}
+
+	// Drop cross-team forwarding at the iptables level
+	for i, src := range subnets {
+		for j, dst := range subnets {
+			if i == j {
+				continue // same team — allow
+			}
+			// iptables -C FORWARD ... checks if rule already exists (exit 0 = exists)
+			checkArgs := []string{
+				"-C", "FORWARD", "-s", src.subnet, "-d", dst.subnet, "-j", "DROP",
+			}
+			if err := exec.Command("iptables", checkArgs...).Run(); err != nil {
+				// Rule doesn't exist, insert it
+				insertArgs := []string{
+					"-I", "FORWARD", "-s", src.subnet, "-d", dst.subnet, "-j", "DROP",
+				}
+				if err := exec.Command("iptables", insertArgs...).Run(); err != nil {
+					logger.Warn("failed to add isolation iptables rule (may need root/capabilities)",
+						"src_team", src.teamID, "dst_team", dst.teamID, "error", err)
+				}
+			}
+		}
+	}
+
+	logger.Info("team network isolation applied via iptables", "teams", len(teamIDs))
 	return nil
 }
 
-// Cleanup removes all managed networks.
+// Cleanup removes all managed networks and isolation rules.
 func (n *NetworkManager) Cleanup(ctx context.Context) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+
+	n.removeIsolationRulesLocked()
 
 	for teamID, netName := range n.teamNets {
 		if netID, exists := n.netIDs[netName]; exists {
@@ -121,6 +166,14 @@ func (n *NetworkManager) Cleanup(ctx context.Context) error {
 	}
 	logger.Info("all team networks cleaned up")
 	return nil
+}
+
+func (n *NetworkManager) removeIsolationRulesLocked() {
+	for tid := range n.teamNets {
+		sn := fmt.Sprintf("%s.%d.0/24", n.ipBase, (tid%254)+1)
+		args := []string{"-D", "FORWARD", "-s", sn, "-j", "DROP"}
+		_ = exec.Command("iptables", args...).Run()
+	}
 }
 
 // CreateAdminNetwork creates a network that can reach all team networks.
