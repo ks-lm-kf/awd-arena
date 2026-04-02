@@ -8,8 +8,11 @@ import (
 	"time"
 
 	"github.com/awd-platform/awd-arena/internal/database"
+	"github.com/awd-platform/awd-arena/internal/engine"
 	"github.com/awd-platform/awd-arena/internal/model"
 	"github.com/awd-platform/awd-arena/internal/service"
+	"github.com/awd-platform/awd-arena/pkg/crypto"
+	"github.com/awd-platform/awd-arena/pkg/logger"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -17,14 +20,16 @@ var AdminHandler *adminHandler
 
 func init() {
 	AdminHandler = &adminHandler{
-		gameSvc: &service.GameService{},
-		teamSvc: &service.TeamService{},
+		gameSvc:      &service.GameService{},
+		teamSvc:      &service.TeamService{},
+		containerSvc: service.NewContainerService(),
 	}
 }
 
 type adminHandler struct {
-	gameSvc *service.GameService
-	teamSvc *service.TeamService
+	gameSvc      *service.GameService
+	teamSvc      *service.TeamService
+	containerSvc *service.ContainerService
 }
 
 // logAdminAction logs an administrative action
@@ -365,7 +370,7 @@ func (h *adminHandler) CreateTeam(c fiber.Ctx) error {
 		team.AvatarURL = req.AvatarURL
 	}
 	if req.Token != "" {
-		team.Token = req.Token
+		team.Token = crypto.SHA256Hex(req.Token)
 	}
 
 	// Log the action
@@ -400,7 +405,7 @@ func (h *adminHandler) UpdateTeam(c fiber.Ctx) error {
 		team.AvatarURL = req.AvatarURL
 	}
 	if req.Token != "" {
-		team.Token = req.Token
+		team.Token = crypto.SHA256Hex(req.Token)
 	}
 
 	db := database.GetDB()
@@ -422,6 +427,11 @@ func (h *adminHandler) DeleteTeam(c fiber.Ctx) error {
 	team, err := h.teamSvc.GetTeam(c.Context(), id)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "team not found"})
+	}
+
+	// Clean up Docker containers for this team
+	if err := h.containerSvc.CleanupTeamContainers(c.Context(), id); err != nil {
+		logger.Error("failed to cleanup containers for team", "team_id", id, "error", err)
 	}
 
 	teamID := id
@@ -483,7 +493,7 @@ func (h *adminHandler) BatchImportTeams(c fiber.Ctx) error {
 			team.AvatarURL = teamReq.AvatarURL
 		}
 		if teamReq.Token != "" {
-			team.Token = teamReq.Token
+			team.Token = crypto.SHA256Hex(teamReq.Token)
 		}
 
 		db := database.GetDB()
@@ -581,6 +591,12 @@ func (h *adminHandler) AdjustScore(c fiber.Ctx) error {
 	}
 	if err := db.Create(&adjustment).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "failed to create score adjustment"})
+	}
+
+	// Immediately recalculate cumulative scores
+	sc := engine.NewScoreCalculator(&game)
+	if err := sc.UpdateCumulativeTeamScores(c.Context()); err != nil {
+		logger.Error("failed to update cumulative scores after adjustment", "error", err)
 	}
 
 	// Log the action

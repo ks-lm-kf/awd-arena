@@ -214,6 +214,36 @@ func (s *ContainerService) TeardownContainers(ctx context.Context, gameID int64)
 	return nil
 }
 
+// CleanupTeamContainers removes all Docker containers for a specific team.
+func (s *ContainerService) CleanupTeamContainers(ctx context.Context, teamID int64) error {
+	mgr, err := getManager()
+	if err != nil {
+		return err
+	}
+
+	db := database.GetDB()
+	if db == nil {
+		return errors.New("database not initialized")
+	}
+
+	var containers []model.TeamContainer
+	if err := db.Where("team_id = ?", teamID).Find(&containers).Error; err != nil {
+		return err
+	}
+
+	for _, tc := range containers {
+		if err := mgr.DestroyContainer(ctx, tc.ContainerID); err != nil {
+			logger.Error("failed to destroy container during team cleanup", "container_id", tc.ContainerID, "error", err)
+		}
+	}
+
+	if len(containers) > 0 {
+		logger.Info("cleaned up containers for team", "team_id", teamID, "count", len(containers))
+	}
+
+	return nil
+}
+
 // PauseContainers pauses all containers for a game.
 func (s *ContainerService) PauseContainers(ctx context.Context, gameID int64) error {
 	mgr, err := getManager()
