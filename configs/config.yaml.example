@@ -1,7 +1,7 @@
 server:
   host: 0.0.0.0
   port: 8080
-  jwt_secret: "awd-arena-secret-key-2024"
+  jwt_secret: "CHANGE_ME_TO_A_STRONG_RANDOM_SECRET"
 
 database:
   sqlite_path: "data/awd.db"

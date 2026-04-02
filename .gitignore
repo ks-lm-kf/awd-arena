@@ -7,6 +7,9 @@
 *.dylib
 awd-arena
 awd-arena.exe
+awd-arena-server
+server
+main
 awd-cli
 awd-cli.exe
 awd-migrator
@@ -14,6 +17,7 @@ awd-migrator.exe
 
 # Build directories / 构建目录
 /build/
+/bin/
 /dist/
 
 # Test binary / 测试二进制
@@ -112,6 +116,7 @@ $RECYCLE.BIN/
 *.pfx
 
 # Sensitive config / 敏感配置
+configs/config.yaml
 configs/config.prod.yaml
 configs/config.local.yaml
 
@@ -143,8 +148,15 @@ bin/
 # Log files
 log/
 
-# Backup files
+# Backup files — all variants
 *.bak
+*.bak[0-9]
+*.bak_*
 *.backup
+*.backup[0-9]*
+*.backup_*
+*.backup.20*
+*.before_*
 *.old
+*.orig
 

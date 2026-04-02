@@ -300,9 +300,10 @@ awd-arena/
 │   ├── engine/          # 比赛引擎（状态机/Flag/计分）
 │   ├── container/       # Docker 容器管理
 │   ├── eventbus/        # 事件总线
-│   ├── server/          # 路由 & WebSocket
+│   ├── network/         # 网络隔离（iptables）
 │   ├── security/        # WAF & 安全
-│   └── monitor/         # 健康监控
+│   └── server/          # 路由 & WebSocket
+├── pkg/                  # 公共工具包（crypto, logger）
 ├── web/                 # React 前端
 │   └── src/
 │       ├── api/         # API 客户端
@@ -311,7 +312,9 @@ awd-arena/
 │       └── hooks/       # 自定义 Hooks
 ├── configs/             # 配置文件
 ├── deployments/         # 部署文件
-└── data/                # SQLite 数据库
+├── scripts/             # 构建 & 部署脚本
+├── migrations/          # SQL 迁移脚本
+└── challenges/          # CTF 题目示例
 ```
 
 ---
