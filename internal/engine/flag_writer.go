@@ -18,13 +18,21 @@ func sanitizeFilePath(path string) string {
 	if !reg.MatchString(path) {
 		return "/flag"
 	}
+	if strings.Contains(path, "..") {
+		return "/flag"
+	}
+	if !strings.HasPrefix(path, "/") {
+		return "/flag"
+	}
 	return path
 }
 
 func shellEscape(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
 	s = strings.ReplaceAll(s, "'", "'\\''")
 	s = strings.ReplaceAll(s, "`", "\\`")
-	s = strings.ReplaceAll(s, "$", "\\$")
+	s = strings.ReplaceAll(s, "$", `\$`)
+	s = strings.ReplaceAll(s, "!", `\!`)
 	s = strings.ReplaceAll(s, "\n", "")
 	s = strings.ReplaceAll(s, "\r", "")
 	return s
@@ -73,7 +81,7 @@ func (fw *FlagWriter) WriteFlag(ctx context.Context, containerID, flag string, c
 				strings.ReplaceAll(safePath, "'", "'\\''"),
 				strings.ReplaceAll(safePath, "'", "'\\''")),
 		},
-		User: "root",
+		User: "awd",
 	}
 
 	execResp, err := fw.dockerClient.ContainerExecCreate(ctx, containerID, execConfig)
@@ -165,14 +173,16 @@ func (fw *FlagWriter) ReadFlag(ctx context.Context, containerID string, customPa
 		path = customPath[0]
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, fw.timeout)
-	defer cancel()
+	safePath := sanitizeFilePath(path)
 
 	execConfig := types.ExecConfig{
 		AttachStdout: true,
 		AttachStderr: true,
-		Cmd:          []string{"cat", path},
+		Cmd:          []string{"cat", safePath},
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, fw.timeout)
+	defer cancel()
 
 	execResp, err := fw.dockerClient.ContainerExecCreate(ctx, containerID, execConfig)
 	if err != nil {
