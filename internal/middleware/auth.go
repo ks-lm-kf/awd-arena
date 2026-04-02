@@ -2,29 +2,55 @@ package middleware
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/awd-platform/awd-arena/internal/config"
+	"github.com/awd-platform/awd-arena/internal/database"
 	"github.com/awd-platform/awd-arena/pkg/logger"
 	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// tokenBlacklist stores revoked tokens with their expiry time.
 var tokenBlacklist sync.Map
 
-// BlacklistToken adds a token to the revocation list.
-func BlacklistToken(token string) {
-	tokenBlacklist.Store(token, time.Now().Add(24*time.Hour))
+func BlacklistToken(tokenString string) {
+	expiry := time.Now().Add(24 * time.Hour)
+	secret := getJWTSecret()
+	if token, err := parseJWTToken(tokenString, secret); err == nil && token.Valid {
+		if claims, ok := token.Claims.(*Claims); ok {
+			if claims.ExpiresAt != nil {
+				expiry = claims.ExpiresAt.Time
+			}
+		}
+	}
+	tokenBlacklist.Store(tokenString, expiry)
+	cleanupBlacklist()
+}
+
+func cleanupBlacklist() {
+	now := time.Now()
+	tokenBlacklist.Range(func(key, value interface{}) bool {
+		if exp, ok := value.(time.Time); ok && now.After(exp) {
+			tokenBlacklist.Delete(key)
+		}
+		return true
+	})
 }
 
 func isTokenBlacklisted(token string) bool {
-	_, ok := tokenBlacklist.Load(token)
-	return ok
+	expiry, ok := tokenBlacklist.Load(token)
+	if !ok {
+		return false
+	}
+	if exp, ok := expiry.(time.Time); ok && time.Now().After(exp) {
+		tokenBlacklist.Delete(token)
+		return false
+	}
+	return true
 }
 
-// Claims represents JWT claims.
 type Claims struct {
 	UserID   int64  `json:"user_id"`
 	Username string `json:"username"`
@@ -33,12 +59,10 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-// getJWTSecret returns the JWT secret from config.
 func getJWTSecret() string {
 	return config.C.Server.JWTSecret
 }
 
-// parseJWTToken parses and validates a JWT token string.
 func parseJWTToken(tokenString, secret string) (*jwt.Token, error) {
 	return jwt.ParseWithClaims(tokenString, &Claims{}, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -48,7 +72,6 @@ func parseJWTToken(tokenString, secret string) (*jwt.Token, error) {
 	})
 }
 
-// JWTAuth returns a JWT authentication middleware.
 func JWTAuth() fiber.Handler {
 	return func(c fiber.Ctx) error {
 		authHeader := c.Get("Authorization")
@@ -85,7 +108,6 @@ func JWTAuth() fiber.Handler {
 	}
 }
 
-// AdminOnly returns a middleware that requires admin role.
 func AdminOnly() fiber.Handler {
 	return func(c fiber.Ctx) error {
 		role, _ := c.Locals("role").(string)
@@ -96,7 +118,46 @@ func AdminOnly() fiber.Handler {
 	}
 }
 
-// GenerateToken generates a JWT token.
+func EnforcePasswordChange() fiber.Handler {
+	return func(c fiber.Ctx) error {
+		userID, ok := c.Locals("user_id").(int64)
+		if !ok || userID == 0 {
+			return c.Next()
+		}
+
+		path := c.Path()
+		allowedPrefixes := []string{
+			"/api/v1/auth/change-password",
+			"/api/v1/auth/password",
+			"/api/v1/auth/logout",
+			"/api/v1/auth/me",
+		}
+		for _, p := range allowedPrefixes {
+			if strings.HasPrefix(path, p) {
+				return c.Next()
+			}
+		}
+
+		db := database.GetDB()
+		if db == nil {
+			return c.Next()
+		}
+
+		var mustChange bool
+		if err := db.Table("users").Select("must_change_password").
+			Where("id = ?", userID).Scan(&mustChange).Error; err == nil {
+			if mustChange {
+				return c.Status(403).JSON(fiber.Map{
+					"code":    403,
+					"message": "password change required before accessing this resource",
+				})
+			}
+		}
+
+		return c.Next()
+	}
+}
+
 func GenerateToken(userID int64, username, role string, teamID *int64) (string, error) {
 	claims := Claims{
 		UserID:   userID,
@@ -112,12 +173,10 @@ func GenerateToken(userID int64, username, role string, teamID *int64) (string, 
 	return token.SignedString([]byte(config.C.Server.JWTSecret))
 }
 
-// GetJWTSecret returns the JWT secret from config.
 func GetJWTSecret() string {
 	return config.C.Server.JWTSecret
 }
 
-// ValidateToken parses and validates a JWT token from the request.
 func ValidateToken(c fiber.Ctx, secret string) (int64, error) {
 	logger.Info("[JWTAuth DEBUG]", "path", c.Path(), "method", c.Method())
 	authHeader := c.Get("Authorization")
@@ -139,7 +198,6 @@ func ValidateToken(c fiber.Ctx, secret string) (int64, error) {
 	return claims.UserID, nil
 }
 
-// JudgeOnly returns a middleware that requires judge or admin role.
 func JudgeOnly() fiber.Handler {
 	return func(c fiber.Ctx) error {
 		role, _ := c.Locals("role").(string)

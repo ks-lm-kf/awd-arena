@@ -23,7 +23,11 @@ func (s *TeamService) CreateTeam(ctx context.Context, name string) (*model.Team,
 		return nil, err
 	}
 
-	team := &model.Team{Name: name, Token: token}
+	team := &model.Team{
+		Name:     name,
+		Token:    crypto.SHA256Hex(token),
+		RawToken: token,
+	}
 	if err := db.Create(team).Error; err != nil {
 		return nil, err
 	}
@@ -76,7 +80,6 @@ func (s *TeamService) UpdateScore(ctx context.Context, teamID int64, delta float
 		Update("score", db.Raw("COALESCE(score, 0) + ?", delta)).Error
 }
 
-
 func (s *TeamService) AddMember(ctx context.Context, teamID int64, userID int64) error {
 	db := database.GetDB()
 	if db == nil {
@@ -118,4 +121,3 @@ func (s *TeamService) RemoveMember(ctx context.Context, teamID int64, userID int
 	// Remove user from team by setting team_id to NULL
 	return db.Model(&user).Update("team_id", nil).Error
 }
-

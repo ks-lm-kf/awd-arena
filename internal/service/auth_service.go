@@ -187,7 +187,7 @@ func (s *AuthService) RegisterWithToken(ctx context.Context, username, password,
 	var teamID *int64
 	if teamToken != "" {
 		var team model.Team
-		if err := db.Where("token = ?", teamToken).First(&team).Error; err != nil {
+		if err := db.Where("token = ?", crypto.SHA256Hex(teamToken)).First(&team).Error; err != nil {
 			return "", nil, fmt.Errorf("invalid team token")
 		}
 		teamID = &team.ID
@@ -240,7 +240,7 @@ func (s *AuthService) JoinTeam(ctx context.Context, userID int64, teamToken stri
 	}
 
 	var team model.Team
-	if err := db.Where("token = ?", teamToken).First(&team).Error; err != nil {
+	if err := db.Where("token = ?", crypto.SHA256Hex(teamToken)).First(&team).Error; err != nil {
 		return errors.New("invalid team token")
 	}
 
@@ -269,7 +269,7 @@ func (s *AuthService) RegisterWithTokenAndRole(ctx context.Context, username, pa
 	var teamID *int64
 	if teamToken != "" {
 		var team model.Team
-		if err := db.Where("token = ?", teamToken).First(&team).Error; err != nil {
+		if err := db.Where("token = ?", crypto.SHA256Hex(teamToken)).First(&team).Error; err != nil {
 			return "", nil, fmt.Errorf("invalid team token")
 		}
 		teamID = &team.ID
