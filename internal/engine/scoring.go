@@ -61,9 +61,8 @@ func (sc *ScoreCalculator) CalculateRoundScores(ctx context.Context, round int) 
 		attack := attackScores[team.ID] * attackWeight
 		defense := defenseLosses[team.ID] * defenseWeight
 		total := attack - defense
-		if total < 0 {
-			total = 0
-		}
+
+		// Zero-sum: no floor — scores CAN go negative
 
 		roundScore := model.RoundScore{
 			GameID:       sc.game.ID,
@@ -74,7 +73,6 @@ func (sc *ScoreCalculator) CalculateRoundScores(ctx context.Context, round int) 
 			TotalScore:   total,
 		}
 
-		// Upsert
 		var existing model.RoundScore
 		err := db.Where("game_id = ? AND round = ? AND team_id = ?", sc.game.ID, round, team.ID).First(&existing).Error
 		if err != nil {
@@ -88,7 +86,6 @@ func (sc *ScoreCalculator) CalculateRoundScores(ctx context.Context, round int) 
 		}
 	}
 
-	// Update cumulative team scores (sum of all rounds)
 	return sc.UpdateCumulativeTeamScores(ctx)
 }
 

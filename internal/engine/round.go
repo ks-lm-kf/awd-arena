@@ -116,122 +116,145 @@ func (rs *RoundScheduler) Run(ctx context.Context) {
 	logger.Info("round scheduler running", "current_round", currentRound)
 
 	for {
+		// Get current pause context for selection
+		rs.mu.Lock()
+		currentPauseCtx := rs.pauseCtx
+		rs.mu.Unlock()
+
 		select {
 		case <-ctx.Done():
 			return
-		case <-roundTimer.C:
-			// Check if paused - wait for resume
+		case <-currentPauseCtx.Done():
+			// Game was paused mid-round - stop the timer
+			roundTimer.Stop()
+			// Wait for resume
 			if !rs.waitForResume(ctx) {
 				return
 			}
-
-			rs.engine.mu.Lock()
-			currentRound = rs.engine.currentRound
-			rs.engine.mu.Unlock()
-
-			logger.Info("round ended", "round", currentRound)
-
-			rs.engine.mu.Lock()
-			if err := rs.engine.onRoundEnd(ctx, currentRound); err != nil {
-				logger.Error("round end error", "error", err)
-			}
-			rs.engine.mu.Unlock()
-
-			rs.broadcastRoundEnd(currentRound)
-
-			rs.engine.mu.Lock()
-			currentRound = rs.engine.currentRound
-			totalRounds := rs.engine.totalRounds
-			rs.engine.mu.Unlock()
-
-			if currentRound >= totalRounds {
-				rs.engine.mu.Lock()
-				rs.engine.currentPhase = "finished"
-				rs.engine.mu.Unlock()
-				logger.Info("game finished", "rounds", totalRounds)
-				rs.broadcastGameFinished()
-
-				rs.engine.finishGame(ctx)
-				return
-			}
-
-			rs.engine.mu.Lock()
-			rs.engine.currentPhase = "break"
-			breakDuration := rs.engine.breakDuration
-			rs.engine.mu.Unlock()
-
-			// Set up break phase with pause/resume support
+			// After resume: reset timer with remaining round time
 			rs.mu.Lock()
-			rs.inBreak = true
-			rs.remainingBreakTime = breakDuration
-			rs.breakStartTime = time.Now()
+			remaining := rs.remainingRoundTime
 			rs.mu.Unlock()
+			if remaining > 0 {
+				roundTimer = time.NewTimer(remaining)
+			}
+			continue
+		case <-roundTimer.C:
+			// Round timer expired normally (or after pause-resume cycle)
+		}
 
-			breakTimer := time.NewTimer(breakDuration)
-		breakLoop:
-			for {
-				select {
-				case <-ctx.Done():
-					breakTimer.Stop()
+		// Check if paused - wait for resume
+		if !rs.waitForResume(ctx) {
+			return
+		}
+
+		rs.engine.mu.Lock()
+		currentRound = rs.engine.currentRound
+		rs.engine.mu.Unlock()
+
+		logger.Info("round ended", "round", currentRound)
+
+		rs.engine.mu.Lock()
+		if err := rs.engine.onRoundEnd(ctx, currentRound); err != nil {
+			logger.Error("round end error", "error", err)
+		}
+		rs.engine.mu.Unlock()
+
+		rs.broadcastRoundEnd(currentRound)
+
+		rs.engine.mu.Lock()
+		currentRound = rs.engine.currentRound
+		totalRounds := rs.engine.totalRounds
+		rs.engine.mu.Unlock()
+
+		if currentRound >= totalRounds {
+			rs.engine.mu.Lock()
+			rs.engine.currentPhase = "finished"
+			rs.engine.mu.Unlock()
+			logger.Info("game finished", "rounds", totalRounds)
+			rs.broadcastGameFinished()
+
+			rs.engine.finishGame(ctx)
+			return
+		}
+
+		rs.engine.mu.Lock()
+		rs.engine.currentPhase = "break"
+		breakDuration := rs.engine.breakDuration
+		rs.engine.mu.Unlock()
+
+		// Set up break phase with pause/resume support
+		rs.mu.Lock()
+		rs.inBreak = true
+		rs.remainingBreakTime = breakDuration
+		rs.breakStartTime = time.Now()
+		breakPauseCtx := rs.pauseCtx
+		rs.mu.Unlock()
+
+		breakTimer := time.NewTimer(breakDuration)
+	breakLoop:
+		for {
+			select {
+			case <-ctx.Done():
+				breakTimer.Stop()
+				return
+			case <-breakPauseCtx.Done():
+				// Paused during break - stop the break timer
+				breakTimer.Stop()
+				// Wait for resume
+				if !rs.waitForResume(ctx) {
 					return
-				case <-breakTimer.C:
+				}
+				// After resume: create new timer with remaining break time
+				rs.mu.Lock()
+				remainingBreak := rs.remainingBreakTime
+				breakPauseCtx = rs.pauseCtx
+				rs.mu.Unlock()
+				if remainingBreak > 0 {
+					breakTimer = time.NewTimer(remainingBreak)
+				} else {
 					break breakLoop
 				}
+			case <-breakTimer.C:
+				break breakLoop
 			}
-
-			// Check if paused during break - wait for resume
-			if !rs.waitForResume(ctx) {
-				return
-			}
-
-			// Use saved remaining break time if we were paused during break
-			rs.mu.Lock()
-			wasInBreak := rs.inBreak
-			remainingBreak := rs.remainingBreakTime
-			rs.mu.Unlock()
-
-			if wasInBreak && remainingBreak > 0 {
-				// We were paused during break and have remaining time
-				continuedBreak := time.NewTimer(remainingBreak)
-				select {
-				case <-ctx.Done():
-					continuedBreak.Stop()
-					return
-				case <-continuedBreak.C:
-				}
-			}
-
-			rs.engine.mu.Lock()
-			currentRound = rs.engine.currentRound
-			rs.engine.mu.Unlock()
-			nextRound := currentRound + 1
-
-			logger.Info("round starting", "round", nextRound)
-
-			rs.mu.Lock()
-			rs.roundStart = time.Now()
-			rs.inBreak = false
-			rs.mu.Unlock()
-
-			rs.engine.mu.Lock()
-			if err := rs.engine.onRoundStart(ctx, nextRound); err != nil {
-				logger.Error("round start error", "error", err)
-			}
-			rs.engine.mu.Unlock()
-
-			rs.broadcastRoundStart(nextRound)
-
-			rs.engine.mu.Lock()
-			roundDuration = rs.engine.roundDuration
-			rs.engine.mu.Unlock()
-
-			// Reset remaining round time for new round
-			rs.mu.Lock()
-			rs.remainingRoundTime = roundDuration
-			rs.mu.Unlock()
-
-			roundTimer.Reset(roundDuration)
 		}
+
+		// Check if paused during break - wait for resume
+		if !rs.waitForResume(ctx) {
+			return
+		}
+
+		rs.engine.mu.Lock()
+		currentRound = rs.engine.currentRound
+		rs.engine.mu.Unlock()
+		nextRound := currentRound + 1
+
+		logger.Info("round starting", "round", nextRound)
+
+		rs.mu.Lock()
+		rs.roundStart = time.Now()
+		rs.inBreak = false
+		rs.mu.Unlock()
+
+		rs.engine.mu.Lock()
+		if err := rs.engine.onRoundStart(ctx, nextRound); err != nil {
+			logger.Error("round start error", "error", err)
+		}
+		rs.engine.mu.Unlock()
+
+		rs.broadcastRoundStart(nextRound)
+
+		rs.engine.mu.Lock()
+		roundDuration = rs.engine.roundDuration
+		rs.engine.mu.Unlock()
+
+		// Reset remaining round time for new round
+		rs.mu.Lock()
+		rs.remainingRoundTime = roundDuration
+		rs.mu.Unlock()
+
+		roundTimer = time.NewTimer(roundDuration)
 	}
 }
 
