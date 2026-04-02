@@ -9,7 +9,6 @@ import (
 	"github.com/awd-platform/awd-arena/internal/database"
 	"github.com/awd-platform/awd-arena/internal/model"
 	"github.com/gofiber/fiber/v3"
-	"github.com/jung-kurt/gofpdf"
 )
 
 var ExportHandler = &exportHandler{}
@@ -60,7 +59,7 @@ func (h *exportHandler) ExportRankingCSV(c fiber.Ctx) error {
 	return c.Send(buf.Bytes())
 }
 
-// ExportRankingPDF exports rankings as a real PDF document.
+// ExportRankingPDF exports rankings as HTML with CJK font support.
 // GET /api/v1/games/:id/export/ranking/pdf
 func (h *exportHandler) ExportRankingPDF(c fiber.Ctx) error {
 	gameID, _ := parseID(c.Params("id"))
@@ -81,46 +80,28 @@ func (h *exportHandler) ExportRankingPDF(c fiber.Ctx) error {
 		teamMap[t.ID] = t.Name
 	}
 
-	pdf := gofpdf.New("P", "mm", "A4", "")
-	pdf.AddPage()
-	pdf.SetFont("Arial", "B", 16)
-	pdf.Cell(0, 10, "AWD Arena Ranking Report")
-	pdf.Ln(14)
-	pdf.SetFont("Arial", "", 10)
-	pdf.Cell(0, 6, "Generated: "+time.Now().Format("2006-01-02 15:04:05"))
-	pdf.Ln(10)
-
-	pdf.SetFont("Arial", "B", 10)
-	colWidths := []float64{15, 50, 30, 30, 30, 30}
-	headers := []string{"Rank", "Team", "Total", "Attack", "Defense", "Round"}
-	for i, h := range headers {
-		pdf.CellFormat(colWidths[i], 8, h, "1", 0, "C", false, 0, "")
-	}
-	pdf.Ln(-1)
-
-	pdf.SetFont("Arial", "", 10)
-	for _, s := range roundScores {
-		cells := []string{
-			fmt.Sprintf("%d", s.Rank),
-			teamMap[s.TeamID],
-			fmt.Sprintf("%.2f", s.TotalScore),
-			fmt.Sprintf("%.2f", s.AttackScore),
-			fmt.Sprintf("%.2f", s.DefenseScore),
-			fmt.Sprintf("%d", s.Round),
-		}
-		for i, cell := range cells {
-			pdf.CellFormat(colWidths[i], 7, cell, "1", 0, "C", false, 0, "")
-		}
-		pdf.Ln(-1)
-	}
-
 	var buf bytes.Buffer
-	if err := pdf.Output(&buf); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "pdf generation failed"})
+	buf.WriteString(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>AWD Arena Ranking</title>
+<style>
+body{font-family:Arial,Helvetica,"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif;margin:20px;background:#fff;color:#333}
+h1{color:#1a1a2e}
+table{border-collapse:collapse;width:100%;margin-top:20px}
+th,td{border:1px solid #ddd;padding:8px;text-align:center}
+th{background:#1a1a2e;color:#fff;font-weight:bold}
+tr:nth-child(even){background:#f5f5f5}
+</style></head><body>
+<h1>AWD Arena Ranking Report</h1>
+<p>Generated: ` + time.Now().Format("2006-01-02 15:04:05") + `</p>
+<table><tr><th>Rank</th><th>Team</th><th>Total</th><th>Attack</th><th>Defense</th><th>Round</th></tr>
+`)
+	for _, s := range roundScores {
+		buf.WriteString(fmt.Sprintf("<tr><td>%d</td><td>%s</td><td>%.2f</td><td>%.2f</td><td>%.2f</td><td>%d</td></tr>\n",
+			s.Rank, teamMap[s.TeamID], s.TotalScore, s.AttackScore, s.DefenseScore, s.Round))
 	}
+	buf.WriteString("</table></body></html>")
 
-	c.Set("Content-Type", "application/pdf")
-	c.Set("Content-Disposition", "attachment; filename=ranking_"+time.Now().Format("20060102_150405")+".pdf")
+	c.Set("Content-Type", "text/html; charset=utf-8")
+	c.Set("Content-Disposition", "attachment; filename=ranking_"+time.Now().Format("20060102_150405")+".html")
 	return c.Send(buf.Bytes())
 }
 

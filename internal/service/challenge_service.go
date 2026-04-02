@@ -80,19 +80,44 @@ func (s *ChallengeService) UpdateChallenge(ctx context.Context, id int64, update
 		return nil, err
 	}
 
-	fields := map[string]interface{}{
-		"name":          updates.Name,
-		"description":   updates.Description,
-		"image_name":    updates.ImageName,
-		"image_tag":     updates.ImageTag,
-		"difficulty":    updates.Difficulty,
-		"base_score":    updates.BaseScore,
-		"exposed_ports": updates.ExposedPorts,
-		"cpu_limit":     updates.CPULimit,
-		"mem_limit":     updates.MemLimit,
+	fields := map[string]interface{}{}
+	if updates.Name != "" {
+		fields["name"] = updates.Name
+	}
+	if updates.Description != "" {
+		fields["description"] = updates.Description
+	}
+	if updates.ImageName != "" {
+		fields["image_name"] = updates.ImageName
+	}
+	if updates.ImageTag != "" {
+		fields["image_tag"] = updates.ImageTag
+	}
+	if updates.Difficulty != "" {
+		fields["difficulty"] = updates.Difficulty
+	}
+	if updates.BaseScore != 0 {
+		fields["base_score"] = updates.BaseScore
+	}
+	if updates.ExposedPorts != "" {
+		fields["exposed_ports"] = updates.ExposedPorts
+	}
+	if updates.CPULimit != 0 {
+		fields["cpu_limit"] = updates.CPULimit
+	}
+	if updates.MemLimit != 0 {
+		fields["mem_limit"] = updates.MemLimit
+	}
+
+	if len(fields) == 0 {
+		return &ch, nil
 	}
 
 	if err := db.Model(&ch).Updates(fields).Error; err != nil {
+		return nil, err
+	}
+
+	if err := db.First(&ch, id).Error; err != nil {
 		return nil, err
 	}
 	return &ch, nil

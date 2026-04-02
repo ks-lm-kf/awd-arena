@@ -27,7 +27,7 @@ func RegisterRoutes(app *fiber.App) {
 	auth.Post("/password", middleware.JWTAuth(), handler.AuthHandler.ChangePassword)
 
 	// Admin routes - User management
-	admin := v1.Group("/admin", middleware.JWTAuth(), middleware.RequireRole(model.RoleAdmin))
+	admin := v1.Group("/admin", middleware.JWTAuth(), middleware.RequireRole(model.RoleAdmin), middleware.EnforcePasswordChange())
 	admin.Get("/users", handler.UserHandler.List)
 	admin.Post("/users", handler.UserHandler.Create)
 	admin.Get("/users/:id", handler.UserHandler.GetUser)
@@ -35,12 +35,12 @@ func RegisterRoutes(app *fiber.App) {
 	admin.Delete("/users/:id", handler.UserHandler.Delete)
 
 	// Security admin routes (view WAF rules, attack logs)
-	security := v1.Group("/security", middleware.JWTAuth(), middleware.RequirePermission(model.PermViewAllData))
+	security := v1.Group("/security", middleware.JWTAuth(), middleware.RequirePermission(model.PermViewAllData), middleware.EnforcePasswordChange())
 	security.Get("/waf/rules", handler.GetWAFRules)
 	security.Get("/attacks", handler.GetGameAttacks)
 
 	// Teams - All authenticated users can list teams
-	teams := v1.Group("/teams", middleware.JWTAuth())
+	teams := v1.Group("/teams", middleware.JWTAuth(), middleware.EnforcePasswordChange())
 	teams.Get("/", middleware.RequirePermission(model.PermViewRankings), handler.TeamHandler.List)
 	teams.Post("/", middleware.RequirePermission(model.PermManageTeams), handler.TeamHandler.Create)
 	teams.Get("/:id", middleware.RequirePermission(model.PermViewRankings), handler.TeamHandler.Get)
@@ -50,7 +50,7 @@ func RegisterRoutes(app *fiber.App) {
 	teams.Delete("/:id", middleware.RequirePermission(model.PermManageTeams), handler.AdminHandler.DeleteTeam)
 
 	// Games - Players can view, Organizers can manage
-	games := v1.Group("/games", middleware.JWTAuth())
+	games := v1.Group("/games", middleware.JWTAuth(), middleware.EnforcePasswordChange())
 	games.Get("/", middleware.RequirePermission(model.PermViewGame), handler.GameHandler.List)
 	games.Post("/", middleware.RequirePermission(model.PermCreateGame), handler.GameHandler.Create)
 	games.Get("/:id", middleware.RequirePermission(model.PermViewGame), handler.GameHandler.Get)
@@ -79,13 +79,13 @@ func RegisterRoutes(app *fiber.App) {
 	games.Get("/:id/containers/stats", middleware.RequirePermission(model.PermViewGameStats), handler.ContainerHandler.Stats)
 
 	// Flags - Players can submit flags
-	flags := v1.Group("/games/:id/flags", middleware.JWTAuth())
+	flags := v1.Group("/games/:id/flags", middleware.JWTAuth(), middleware.EnforcePasswordChange())
 	flags.Post("/submit", middleware.FlagSubmitRateLimit(100, 60*time.Second), middleware.RequirePermission(model.PermSubmitFlag), handler.FlagHandler.Submit)
 	flags.Get("/history", middleware.RequirePermission(model.PermViewOwnStats), handler.FlagHandler.History)
 
 	// Rankings - All authenticated users can view
-	v1.Get("/games/:id/rankings", middleware.JWTAuth(), middleware.RequirePermission(model.PermViewRankings), handler.RankingHandler.Get)
-	v1.Get("/games/:id/rankings/rounds/:round", middleware.JWTAuth(), middleware.RequirePermission(model.PermViewRankings), handler.RankingHandler.GetRound)
+	v1.Get("/games/:id/rankings", middleware.JWTAuth(), middleware.EnforcePasswordChange(), middleware.RequirePermission(model.PermViewRankings), handler.RankingHandler.Get)
+	v1.Get("/games/:id/rankings/rounds/:round", middleware.JWTAuth(), middleware.EnforcePasswordChange(), middleware.RequirePermission(model.PermViewRankings), handler.RankingHandler.GetRound)
 
 	// Player container info - Players can view their own containers
 	games.Get("/:id/my-containers", middleware.RequirePermission(model.PermViewOwnStats), handler.ScoreHandler.GetMyContainers)
@@ -95,7 +95,7 @@ func RegisterRoutes(app *fiber.App) {
 	app.Get("/ws", HandleWebSocket)
 
 	// Docker Images - Legacy routes (keeping for compatibility)
-	dockerImages := v1.Group("/docker-images", middleware.JWTAuth(), middleware.RequireRole(model.RoleAdmin))
+	dockerImages := v1.Group("/docker-images", middleware.JWTAuth(), middleware.RequireRole(model.RoleAdmin), middleware.EnforcePasswordChange())
 	dockerImages.Get("/", handler.DockerImageHandlerObj.List)
 	dockerImages.Get("/host/list", handler.DockerImageHandlerObj.HostList)
 	dockerImages.Get("/:id", handler.DockerImageHandlerObj.Get)
@@ -105,7 +105,7 @@ func RegisterRoutes(app *fiber.App) {
 	dockerImages.Post("/:id/pull", handler.DockerImageHandlerObj.Pull)
 
 	// Admin Image Management Routes - Enhanced with full CRUD operations
-	adminImages := v1.Group("/admin/images", middleware.JWTAuth(), middleware.RequireRole(model.RoleAdmin))
+	adminImages := v1.Group("/admin/images", middleware.JWTAuth(), middleware.RequireRole(model.RoleAdmin), middleware.EnforcePasswordChange())
 	adminImages.Get("/", handler.DockerImageHandlerObj.List)
 	adminImages.Get("/host/list", handler.DockerImageHandlerObj.HostList)
 	adminImages.Post("/pull", handler.DockerImageHandlerObj.PullImage)
@@ -125,7 +125,7 @@ func RegisterRoutes(app *fiber.App) {
 	games.Post("/:id/rounds", middleware.RequirePermission(model.PermPauseGame), handler.RoundHandler.ControlRounds)
 
 	// Admin routes for judges (organizer role) - Enhanced with logging
-	judge := v1.Group("/judge", middleware.JWTAuth(), middleware.RequireRole(model.RoleAdmin, model.RoleOrganizer))
+	judge := v1.Group("/judge", middleware.JWTAuth(), middleware.RequireRole(model.RoleAdmin, model.RoleOrganizer), middleware.EnforcePasswordChange())
 
 	// Admin logs
 	judge.Get("/logs", handler.AdminHandler.GetAdminLogs)
@@ -154,13 +154,13 @@ func RegisterRoutes(app *fiber.App) {
 	judge.Post("/scores/adjust", handler.AdminHandler.AdjustScore)
 
 	// Settings - System settings management
-	settings := v1.Group("/settings", middleware.JWTAuth())
+	settings := v1.Group("/settings", middleware.JWTAuth(), middleware.EnforcePasswordChange())
 	settings.Get("/", handler.SettingsHandler.GetSettings)
 	settings.Put("/", middleware.RequirePermission(model.PermManageSettings), handler.SettingsHandler.UpdateSettings)
 
 	// WAF rules alias (test expects /api/v1/waf/rules)
 	// WAF rules - use group-level auth
-	wafGroup := v1.Group("/waf", middleware.JWTAuth(), middleware.RequireRole(model.RoleAdmin))
+	wafGroup := v1.Group("/waf", middleware.JWTAuth(), middleware.RequireRole(model.RoleAdmin), middleware.EnforcePasswordChange())
 	wafGroup.Get("/rules", handler.GetWAFRules)
 
 	// Health
@@ -169,17 +169,17 @@ func RegisterRoutes(app *fiber.App) {
 	})
 
 	// Dashboard routes
-	dashboard := v1.Group("/dashboard", middleware.JWTAuth())
+	dashboard := v1.Group("/dashboard", middleware.JWTAuth(), middleware.EnforcePasswordChange())
 	dashboard.Get("/", handler.DashboardHandler.GetDashboard)
 	dashboard.Get("/activity", handler.DashboardHandler.GetRecentActivity)
 
 	// Audit API (admin only)
-	audit := app.Group("/api/audit", middleware.JWTAuth(), middleware.RequireRole(model.RoleAdmin))
+	audit := app.Group("/api/audit", middleware.JWTAuth(), middleware.RequireRole(model.RoleAdmin), middleware.EnforcePasswordChange())
 	audit.Get("/logs", handler.AuditHandler.GetAuditLogs)
 	audit.Get("/stats", handler.AuditHandler.GetAuditStats)
 
 	// Export API
-	export := v1.Group("/games/:id/export", middleware.JWTAuth())
+	export := v1.Group("/games/:id/export", middleware.JWTAuth(), middleware.EnforcePasswordChange())
 	export.Get("/scoreboard/csv", handler.ExportHandler.ExportRankingCSV)
 	export.Get("/ranking/csv", handler.ExportHandler.ExportRankingCSV)
 	export.Get("/scoreboard/pdf", handler.ExportHandler.ExportRankingPDF)
