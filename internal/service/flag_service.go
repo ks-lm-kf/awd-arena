@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/awd-platform/awd-arena/internal/database"
@@ -130,18 +131,10 @@ func (s *FlagService) SubmitFlag(ctx context.Context, gameID, round, attackerTea
 	}
 
 	err = db.Transaction(func(tx *gorm.DB) error {
-		var existing int64
-		tx.Model(&model.FlagSubmission{}).Where(
-			"game_id = ? AND round = ? AND attacker_team = ? AND flag_hash = ?",
-			gameID, round, attackerTeam, flagHash,
-		).Count(&existing)
-		if existing > 0 {
-			return errors.New("already submitted")
-		}
 		return tx.Create(&submission).Error
 	})
 	if err != nil {
-		if err.Error() == "already submitted" {
+		if strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "duplicate") {
 			return true, 0, nil
 		}
 		logger.Error("failed to create flag submission", "error", err)
