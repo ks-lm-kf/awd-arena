@@ -16,7 +16,10 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (user?.team_id) {
-      teamApi.get(user.team_id).then(setTeamInfo).catch(() => {})
+      teamApi.get(user.team_id).then(setTeamInfo).catch((err) => {
+        console.error('Failed to load data:', err);
+        message.error('加载数据失败');
+      })
     }
   }, [user?.team_id])
 

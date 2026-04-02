@@ -19,18 +19,18 @@ import (
 )
 
 var (
-	AuthHandler            *authHandler
-	GameHandler            *gameHandler
-	TeamHandler            *teamHandler
-	FlagHandler            *flagHandler
-	FlagRefreshHandlerObj  *FlagRefreshHandler
-	ContainerHandler       *containerHandler
-	RankingHandler         *rankingHandler
-	ChallengeHandler       *challengeHandler
-	UserHandler            *userHandler
-	DockerImageHandlerObj  *DockerImageHandler
+	AuthHandler           *authHandler
+	GameHandler           *gameHandler
+	TeamHandler           *teamHandler
+	FlagHandler           *flagHandler
+	FlagRefreshHandlerObj *FlagRefreshHandler
+	ContainerHandler      *containerHandler
+	RankingHandler        *rankingHandler
+	ChallengeHandler      *challengeHandler
+	UserHandler           *userHandler
+	DockerImageHandlerObj *DockerImageHandler
 	RoundHandler          *roundHandler
-	TemplateHandlerObj      *TemplateHandler
+	TemplateHandlerObj    *TemplateHandler
 )
 
 func init() {
@@ -48,9 +48,12 @@ func init() {
 	TemplateHandlerObj = NewTemplateHandler()
 }
 
-func parseID(s string) int64 {
-	id, _ := strconv.ParseInt(s, 10, 64)
-	return id
+func parseID(s string) (int64, error) {
+	id, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid ID: %s", s)
+	}
+	return id, nil
 }
 
 // containsHTML checks if a string contains HTML tags
@@ -93,16 +96,16 @@ func (h *authHandler) Login(c fiber.Ctx) error {
 	if req.Username == "" || req.Password == "" {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "username and password required"})
 	}
-	
+
 	// Validate username doesn't contain HTML tags
 	if containsHTML(req.Username) {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "username contains invalid characters"})
 	}
-	
+
 	// Create context with timeout for login operation (10 seconds)
 	ctx, cancel := context.WithTimeout(c.Context(), 10*time.Second)
 	defer cancel()
-	
+
 	token, userInfo, err := h.svc.Login(ctx, req.Username, req.Password)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
@@ -154,12 +157,11 @@ func (h *authHandler) ChangePassword(c fiber.Ctx) error {
 	return c.JSON(fiber.Map{"code": 0, "message": "password changed successfully"})
 }
 
-
 // Register handles user registration with XSS protection
 
 // validateUsername validates the username format to prevent XSS
 func validateUsername(username string) error {
-	matched, _ := regexp.MatchString(`^[a-zA-Z0-9_\x{4e00}-\x{9fa5}]{2,50}$`, username)
+	matched, _ := regexp.MatchString(`^[a-zA-Z0-9_\p{Han}]{2,50}$`, username)
 	if !matched {
 		return errors.New("用户名只能包含字母、数字、下划线、中文 (2-50字符)")
 	}
@@ -201,20 +203,9 @@ func (h *authHandler) Register(c fiber.Ctx) error {
 		}
 	}
 
-	// XSS Protection: Validate role if provided
-	var sanitizedRole string
-	if req.Role != "" {
-		sanitizedRole, err = validateAndSanitizeInput(req.Role, "role")
-		if err != nil {
-			return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
-		}
-	}
-
-	// Default role is player if not specified
-	role := sanitizedRole
-	if role == "" {
-		role = "player"
-	}
+	// SECURITY: Registration always creates a player role.
+	// Only admin users can set roles via the admin user management endpoints.
+	role := "player"
 
 	// Use RegisterWithTokenAndRole for full registration with sanitized username
 	token, userInfo, err := h.svc.RegisterWithTokenAndRole(c.Context(), sanitizedUsername, req.Password, req.TeamToken, role)
@@ -269,7 +260,6 @@ func (h *authHandler) RefreshToken(c fiber.Ctx) error {
 	})
 }
 
-
 func (h *authHandler) Me(c fiber.Ctx) error {
 	userIDRaw := c.Locals("user_id")
 	userID, ok := userIDRaw.(int64)
@@ -302,7 +292,11 @@ func (h *gameHandler) List(c fiber.Ctx) error {
 }
 
 func (h *gameHandler) Get(c fiber.Ctx) error {
-	game, err := h.svc.GetGame(c.Context(), parseID(c.Params("id")))
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+	game, err := h.svc.GetGame(c.Context(), id)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "game not found"})
 	}
@@ -310,15 +304,15 @@ func (h *gameHandler) Get(c fiber.Ctx) error {
 }
 
 type createGameRequest struct {
-	Title          string  `json:"title"`
-	Description    string  `json:"description"`
-	Mode           string  `json:"mode"`
-	RoundDuration  int     `json:"round_duration"`
-	BreakDuration  int     `json:"break_duration"`
-	TotalRounds    int     `json:"total_rounds"`
-	FlagFormat     string  `json:"flag_format"`
-	AttackWeight   float64 `json:"attack_weight"`
-	DefenseWeight  float64 `json:"defense_weight"`
+	Title         string  `json:"title"`
+	Description   string  `json:"description"`
+	Mode          string  `json:"mode"`
+	RoundDuration int     `json:"round_duration"`
+	BreakDuration int     `json:"break_duration"`
+	TotalRounds   int     `json:"total_rounds"`
+	FlagFormat    string  `json:"flag_format"`
+	AttackWeight  float64 `json:"attack_weight"`
+	DefenseWeight float64 `json:"defense_weight"`
 }
 
 func (h *gameHandler) Create(c fiber.Ctx) error {
@@ -336,13 +330,13 @@ func (h *gameHandler) Create(c fiber.Ctx) error {
 	if req.Title == "" {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "title is required"})
 	}
-	
+
 	// XSS Protection: Validate and sanitize title
 	sanitizedTitle, err := validateAndSanitizeInput(req.Title, "title")
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 	}
-	
+
 	// XSS Protection: Sanitize description
 	var sanitizedDesc string
 	if req.Description != "" {
@@ -351,7 +345,7 @@ func (h *gameHandler) Create(c fiber.Ctx) error {
 			return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 		}
 	}
-	
+
 	userID, _ := c.Locals("user_id").(int64)
 
 	game := &model.Game{
@@ -396,7 +390,10 @@ func (h *gameHandler) Create(c fiber.Ctx) error {
 }
 
 func (h *gameHandler) Update(c fiber.Ctx) error {
-	id := parseID(c.Params("id"))
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
 	game, err := h.svc.GetGame(c.Context(), id)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "game not found"})
@@ -449,70 +446,82 @@ func (h *gameHandler) Update(c fiber.Ctx) error {
 }
 
 func (h *gameHandler) Start(c fiber.Ctx) error {
-	if err := h.svc.StartGame(c.Context(), parseID(c.Params("id"))); err != nil {
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+	if err := h.svc.StartGame(c.Context(), id); err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "game started"})
 }
 
 func (h *gameHandler) Pause(c fiber.Ctx) error {
-	if err := h.svc.PauseGame(c.Context(), parseID(c.Params("id"))); err != nil {
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+	if err := h.svc.PauseGame(c.Context(), id); err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "game paused"})
 }
 
 func (h *gameHandler) Stop(c fiber.Ctx) error {
-	if err := h.svc.StopGame(c.Context(), parseID(c.Params("id"))); err != nil {
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+	if err := h.svc.StopGame(c.Context(), id); err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "game stopped"})
 }
 
 func (h *gameHandler) Reset(c fiber.Ctx) error {
-	id := parseID(c.Params("id"))
-	if id == 0 {
-		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "invalid game id"})
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 	}
-	
+
 	// Check if game exists
 	game, err := h.svc.GetGame(c.Context(), id)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "game not found"})
 	}
-	
+
 	// Check if game can be reset (should not be running)
 	if game.Status == "running" {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "cannot reset a running game, please stop it first"})
 	}
-	
+
 	if err := h.svc.ResetGame(c.Context(), id); err != nil {
 		logger.Error("failed to reset game", "game_id", id, "error", err)
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": fmt.Sprintf("reset failed: %s", err.Error())})
 	}
-	
+
 	logger.Info("game reset successfully", "game_id", id)
 	return c.JSON(fiber.Map{"code": 0, "message": "game reset successfully"})
 }
 
 func (h *gameHandler) Delete(c fiber.Ctx) error {
-	id := parseID(c.Params("id"))
-	if id == 0 {
-		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "invalid id"})
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 	}
-	
+
 	// 检查游戏是否存在
-	_, err := h.svc.GetGame(c.Context(), id)
+	_, err = h.svc.GetGame(c.Context(), id)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "game not found"})
 	}
-	
+
 	// 删除游戏
 	db := database.GetDB()
 	if err := db.Delete(&model.Game{}, id).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
-	
+
 	return c.JSON(fiber.Map{"code": 0, "message": "deleted"})
 }
 
@@ -531,7 +540,11 @@ func (h *teamHandler) List(c fiber.Ctx) error {
 }
 
 func (h *teamHandler) Get(c fiber.Ctx) error {
-	team, err := h.svc.GetTeam(c.Context(), parseID(c.Params("id")))
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+	team, err := h.svc.GetTeam(c.Context(), id)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "team not found"})
 	}
@@ -552,13 +565,13 @@ func (h *teamHandler) Create(c fiber.Ctx) error {
 	if req.Name == "" {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "team name is required"})
 	}
-	
+
 	// XSS Protection: Validate and sanitize team name
 	sanitizedName, err := validateAndSanitizeInput(req.Name, "team name")
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 	}
-	
+
 	team, err := h.svc.CreateTeam(c.Context(), sanitizedName)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
@@ -574,11 +587,19 @@ func (h *teamHandler) Create(c fiber.Ctx) error {
 	if req.AvatarURL != "" {
 		team.AvatarURL = req.AvatarURL
 	}
+	// Save the updated team
+	if err := database.GetDB().Save(&team).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "failed to update team details"})
+	}
 	return c.Status(201).JSON(fiber.Map{"code": 0, "message": "ok", "data": team})
 }
 
 func (h *teamHandler) Members(c fiber.Ctx) error {
-	members, err := h.svc.GetTeamMembers(c.Context(), parseID(c.Params("id")))
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+	members, err := h.svc.GetTeamMembers(c.Context(), id)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
@@ -601,7 +622,10 @@ func (h *flagHandler) Submit(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "invalid request body"})
 	}
 
-	gameID := parseID(c.Params("id"))
+	gameID, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
 
 	// Get team_id from JWT claims
 	teamIDVal := c.Locals("team_id")
@@ -639,7 +663,11 @@ func (h *flagHandler) Submit(c fiber.Ctx) error {
 func (h *flagHandler) History(c fiber.Ctx) error {
 	roundStr := c.Query("round", "0")
 	round, _ := strconv.Atoi(roundStr)
-	history, err := h.svc.GetFlagHistory(c.Context(), parseID(c.Params("id")), round)
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+	history, err := h.svc.GetFlagHistory(c.Context(), id, round)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
@@ -653,7 +681,11 @@ type containerHandler struct {
 }
 
 func (h *containerHandler) List(c fiber.Ctx) error {
-	containers, err := h.svc.GetContainers(c.Context(), parseID(c.Params("id")))
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+	containers, err := h.svc.GetContainers(c.Context(), id)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
@@ -662,21 +694,37 @@ func (h *containerHandler) List(c fiber.Ctx) error {
 
 func (h *containerHandler) Restart(c fiber.Ctx) error {
 	operatorID, _ := c.Locals("user_id").(int64)
-	if err := h.svc.RestartContainer(c.Context(), parseID(c.Params("id")), parseID(c.Params("cid")), operatorID); err != nil {
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+	cid, err := parseID(c.Params("cid"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+	if err := h.svc.RestartContainer(c.Context(), id, cid, operatorID); err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok"})
 }
 
 func (h *containerHandler) BulkRestart(c fiber.Ctx) error {
-	if err := h.svc.RestartAll(c.Context(), parseID(c.Params("id"))); err != nil {
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+	if err := h.svc.RestartAll(c.Context(), id); err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok"})
 }
 
 func (h *containerHandler) Stats(c fiber.Ctx) error {
-	stats, err := h.svc.GetStats(c.Context(), parseID(c.Params("id")))
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+	stats, err := h.svc.GetStats(c.Context(), id)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
@@ -690,7 +738,11 @@ type rankingHandler struct {
 }
 
 func (h *rankingHandler) Get(c fiber.Ctx) error {
-	rankings, err := h.svc.GetRankings(c.Context(), parseID(c.Params("id")))
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+	rankings, err := h.svc.GetRankings(c.Context(), id)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
@@ -699,7 +751,11 @@ func (h *rankingHandler) Get(c fiber.Ctx) error {
 
 func (h *rankingHandler) GetRound(c fiber.Ctx) error {
 	round, _ := strconv.Atoi(c.Params("round"))
-	rankings, err := h.svc.GetRoundRankings(c.Context(), parseID(c.Params("id")), round)
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+	rankings, err := h.svc.GetRoundRankings(c.Context(), id, round)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
@@ -713,7 +769,11 @@ type challengeHandler struct {
 }
 
 func (h *challengeHandler) List(c fiber.Ctx) error {
-	challenges, err := h.svc.ListChallenges(c.Context(), parseID(c.Params("id")))
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+	challenges, err := h.svc.ListChallenges(c.Context(), id)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
@@ -738,13 +798,18 @@ func (h *challengeHandler) Create(c fiber.Ctx) error {
 	if req.Name == "" || req.ImageName == "" {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "name and image_name are required"})
 	}
-	
+
+	gameID, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+
 	// XSS Protection: Validate and sanitize challenge name
 	sanitizedName, err := validateAndSanitizeInput(req.Name, "challenge name")
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 	}
-	
+
 	// XSS Protection: Sanitize description
 	var sanitizedDesc string
 	if req.Description != "" {
@@ -753,9 +818,9 @@ func (h *challengeHandler) Create(c fiber.Ctx) error {
 			return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 		}
 	}
-	
+
 	ch, err := h.svc.CreateChallenge(c.Context(), &model.Challenge{
-		GameID:       parseID(c.Params("id")),
+		GameID:       gameID,
 		Name:         sanitizedName,
 		Description:  sanitizedDesc,
 		ImageName:    req.ImageName,
@@ -775,8 +840,8 @@ func (h *challengeHandler) Create(c fiber.Ctx) error {
 // --- User ---
 
 func (h *challengeHandler) Update(c fiber.Ctx) error {
-	challengeID := parseID(c.Params("challengeId"))
-	if challengeID == 0 {
+	challengeID, err := parseID(c.Params("challengeId"))
+	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "invalid challenge id"})
 	}
 
@@ -827,9 +892,9 @@ func (h *challengeHandler) Update(c fiber.Ctx) error {
 }
 
 func (h *challengeHandler) Delete(c fiber.Ctx) error {
-	challengeID := parseID(c.Params("challengeId"))
-	if challengeID == 0 {
-		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "invalid challenge id"})
+	challengeID, err := parseID(c.Params("challengeId"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 	}
 
 	if err := h.svc.DeleteChallenge(c.Context(), challengeID); err != nil {
@@ -837,7 +902,6 @@ func (h *challengeHandler) Delete(c fiber.Ctx) error {
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok"})
 }
-
 
 type userHandler struct {
 	svc *service.AuthService
@@ -864,13 +928,13 @@ func (h *userHandler) Create(c fiber.Ctx) error {
 	if req.Username == "" || req.Password == "" {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "username and password required"})
 	}
-	
+
 	// XSS Protection: Validate and sanitize username
 	sanitizedUsername, err := validateAndSanitizeInput(req.Username, "username")
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 	}
-	
+
 	// XSS Protection: Sanitize role if provided
 	var sanitizedRole string
 	if req.Role != "" {
@@ -879,7 +943,7 @@ func (h *userHandler) Create(c fiber.Ctx) error {
 			return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 		}
 	}
-	
+
 	if err := h.svc.Register(c.Context(), sanitizedUsername, req.Password, sanitizedRole, req.TeamID); err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
@@ -887,7 +951,10 @@ func (h *userHandler) Create(c fiber.Ctx) error {
 }
 
 func (h *userHandler) Update(c fiber.Ctx) error {
-	id := parseID(c.Params("id"))
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
 	var req struct {
 		Password *string `json:"password"`
 		Email    *string `json:"email"`
@@ -897,7 +964,7 @@ func (h *userHandler) Update(c fiber.Ctx) error {
 	if err := c.Bind().Body(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "invalid request body"})
 	}
-	
+
 	// XSS Protection: Sanitize email if provided
 	var sanitizedEmail *string
 	if req.Email != nil {
@@ -907,7 +974,7 @@ func (h *userHandler) Update(c fiber.Ctx) error {
 		}
 		sanitizedEmail = &sanitized
 	}
-	
+
 	// XSS Protection: Sanitize role if provided
 	var sanitizedRole *string
 	if req.Role != nil {
@@ -917,7 +984,7 @@ func (h *userHandler) Update(c fiber.Ctx) error {
 		}
 		sanitizedRole = &sanitized
 	}
-	
+
 	if err := h.svc.UpdateUser(c.Context(), id, req.Password, sanitizedEmail, sanitizedRole, req.TeamID); err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
@@ -925,7 +992,10 @@ func (h *userHandler) Update(c fiber.Ctx) error {
 }
 
 func (h *userHandler) Delete(c fiber.Ctx) error {
-	id := parseID(c.Params("id"))
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
 	if err := h.svc.DeleteUser(c.Context(), id); err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
@@ -934,9 +1004,9 @@ func (h *userHandler) Delete(c fiber.Ctx) error {
 
 // GetUser returns a single user by ID.
 func (h *userHandler) GetUser(c fiber.Ctx) error {
-	id := parseID(c.Params("id"))
-	if id == 0 {
-		return c.Status(400).JSON(fiber.Map{"error": "invalid user id"})
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	var user model.User
@@ -954,17 +1024,21 @@ func (h *userHandler) GetUser(c fiber.Ctx) error {
 
 // Resume resumes a paused game.
 func (h *gameHandler) Resume(c fiber.Ctx) error {
-	if err := h.svc.ResumeGame(c.Context(), parseID(c.Params("id"))); err != nil {
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+	if err := h.svc.ResumeGame(c.Context(), id); err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "game resumed"})
 }
 
-
-
-
 func (h *teamHandler) AddMember(c fiber.Ctx) error {
-	teamID := parseID(c.Params("id"))
+	teamID, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
 	var req struct {
 		UserID int64 `json:"user_id"`
 	}
@@ -982,8 +1056,14 @@ func (h *teamHandler) AddMember(c fiber.Ctx) error {
 }
 
 func (h *teamHandler) RemoveMember(c fiber.Ctx) error {
-	teamID := parseID(c.Params("id"))
-	userID := parseID(c.Params("userId"))
+	teamID, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+	userID, err := parseID(c.Params("userId"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
 
 	if err := h.svc.RemoveMember(c.Context(), teamID, userID); err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})

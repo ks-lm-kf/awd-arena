@@ -21,7 +21,7 @@ export interface AuditLogListResponse {
 
 export const auditApi = {
   getLogs: async (page: number = 1, pageSize: number = 20): Promise<AuditLogListResponse> => {
-    const response = await client.get('/api/v1/judge/logs', {
+    const response = await client.get('/judge/logs', {
       params: {
         page,
         page_size: pageSize,

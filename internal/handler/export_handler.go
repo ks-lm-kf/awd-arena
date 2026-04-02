@@ -10,12 +10,13 @@ import (
 )
 
 var ExportHandler = &exportHandler{}
+
 type exportHandler struct{}
 
 // ExportRankingCSV exports rankings as CSV
 // GET /api/v1/games/:id/export/ranking/csv
 func (h *exportHandler) ExportRankingCSV(c fiber.Ctx) error {
-	gameID := parseID(c.Params("id"))
+	gameID, _ := parseID(c.Params("id"))
 	db := database.GetDB()
 	if db == nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "database not available"})
@@ -46,7 +47,7 @@ func (h *exportHandler) ExportRankingCSV(c fiber.Ctx) error {
 // ExportRankingPDF exports rankings as HTML report
 // GET /api/v1/games/:id/export/ranking/pdf
 func (h *exportHandler) ExportRankingPDF(c fiber.Ctx) error {
-	gameID := parseID(c.Params("id"))
+	gameID, _ := parseID(c.Params("id"))
 	db := database.GetDB()
 	if db == nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "database not available"})
@@ -85,7 +86,7 @@ func (h *exportHandler) ExportRankingPDF(c fiber.Ctx) error {
 // ExportAttackLog exports attack logs as CSV
 // GET /api/v1/games/:id/export/attacks
 func (h *exportHandler) ExportAttackLog(c fiber.Ctx) error {
-	gameID := parseID(c.Params("id"))
+	gameID, _ := parseID(c.Params("id"))
 	db := database.GetDB()
 	if db == nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "database not available"})
@@ -97,7 +98,9 @@ func (h *exportHandler) ExportAttackLog(c fiber.Ctx) error {
 	csv := "Time,AttackerTeam,TargetTeam,Correct,Points,Round\n"
 	for _, s := range submissions {
 		correct := "no"
-		if s.IsCorrect { correct = "yes" }
+		if s.IsCorrect {
+			correct = "yes"
+		}
 		csv += fmt.Sprintf("%s,%d,%d,%s,%.2f,%d\n",
 			s.SubmittedAt.Format("2006-01-02 15:04:05"), s.AttackerTeam, s.TargetTeam, correct, s.PointsEarned, s.Round)
 	}

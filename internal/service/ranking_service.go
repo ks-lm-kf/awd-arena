@@ -10,10 +10,10 @@ import (
 
 // RankingItem represents a team in the ranking list.
 type RankingItem struct {
-	Rank       int     `json:"rank"`
-	TeamID     int64   `json:"team_id"`
-	TeamName   string  `json:"team_name"`
-	Score      float64 `json:"score"`
+	Rank        int     `json:"rank"`
+	TeamID      int64   `json:"team_id"`
+	TeamName    string  `json:"team_name"`
+	Score       float64 `json:"score"`
 	AttackScore float64 `json:"attack_score"`
 	DefenseLoss float64 `json:"defense_loss"`
 }
@@ -29,7 +29,9 @@ func (s *RankingService) GetRankings(ctx context.Context, gameID int64) ([]Ranki
 	}
 
 	var teams []model.Team
-	if err := db.Order("score desc").Find(&teams).Error; err != nil {
+	if err := db.Joins("JOIN game_teams ON game_teams.team_id = teams.id").
+		Where("game_teams.game_id = ?", gameID).
+		Order("score desc").Find(&teams).Error; err != nil {
 		return nil, err
 	}
 

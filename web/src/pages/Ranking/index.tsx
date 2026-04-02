@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Card, Select, Table, Tag, Typography, Space } from 'antd'
+import { Card, Select, Table, Tag, Typography, Space, message } from 'antd'
 import { TrophyOutlined } from '@ant-design/icons'
 import { gameApi } from '@/api/game'
 import { rankingApi } from '@/api/ranking'
@@ -24,13 +24,19 @@ export default function RankingPage() {
         setSelectedGame(running.id)
         setRounds(Array.from({ length: running.current_round }, (_, i) => i + 1))
       }
-    }).catch(() => {})
+    }).catch((err) => {
+      console.error('Failed to load data:', err);
+      message.error('加载数据失败');
+    })
   }, [])
 
   useEffect(() => {
     if (!selectedGame) return
     ;(selectedRound ? rankingApi.round(selectedGame, selectedRound) : rankingApi.list(selectedGame))
-      .then(setRankings).catch(() => {})
+      .then(setRankings).catch((err) => {
+        console.error('Failed to load data:', err);
+        message.error('加载数据失败');
+      })
   }, [selectedGame, selectedRound])
 
   useEffect(() => {

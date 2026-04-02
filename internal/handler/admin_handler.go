@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"html"
 	"strconv"
 	"time"
 
@@ -159,7 +160,10 @@ func (h *adminHandler) CreateGame(c fiber.Ctx) error {
 }
 
 func (h *adminHandler) UpdateGame(c fiber.Ctx) error {
-	id := parseID(c.Params("id"))
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
 	game, err := h.gameSvc.GetGame(c.Context(), id)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "game not found"})
@@ -172,10 +176,10 @@ func (h *adminHandler) UpdateGame(c fiber.Ctx) error {
 
 	oldTitle := game.Title
 	if req.Title != "" {
-		game.Title = req.Title
+		game.Title = html.EscapeString(req.Title)
 	}
 	if req.Description != "" {
-		game.Description = req.Description
+		game.Description = html.EscapeString(req.Description)
 	}
 	if req.Mode != "" {
 		game.Mode = req.Mode
@@ -210,7 +214,10 @@ func (h *adminHandler) UpdateGame(c fiber.Ctx) error {
 }
 
 func (h *adminHandler) DeleteGame(c fiber.Ctx) error {
-	id := parseID(c.Params("id"))
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
 	game, err := h.gameSvc.GetGame(c.Context(), id)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "game not found"})
@@ -228,7 +235,10 @@ func (h *adminHandler) DeleteGame(c fiber.Ctx) error {
 }
 
 func (h *adminHandler) StartGame(c fiber.Ctx) error {
-	id := parseID(c.Params("id"))
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
 	game, err := h.gameSvc.GetGame(c.Context(), id)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "game not found"})
@@ -245,7 +255,10 @@ func (h *adminHandler) StartGame(c fiber.Ctx) error {
 }
 
 func (h *adminHandler) PauseGame(c fiber.Ctx) error {
-	id := parseID(c.Params("id"))
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
 	game, err := h.gameSvc.GetGame(c.Context(), id)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "game not found"})
@@ -262,13 +275,16 @@ func (h *adminHandler) PauseGame(c fiber.Ctx) error {
 }
 
 func (h *adminHandler) ResumeGame(c fiber.Ctx) error {
-	id := parseID(c.Params("id"))
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
 	game, err := h.gameSvc.GetGame(c.Context(), id)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "game not found"})
 	}
 
-	if err := h.gameSvc.StartGame(c.Context(), id); err != nil {
+	if err := h.gameSvc.ResumeGame(c.Context(), id); err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
 
@@ -279,7 +295,10 @@ func (h *adminHandler) ResumeGame(c fiber.Ctx) error {
 }
 
 func (h *adminHandler) StopGame(c fiber.Ctx) error {
-	id := parseID(c.Params("id"))
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
 	game, err := h.gameSvc.GetGame(c.Context(), id)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "game not found"})
@@ -296,7 +315,10 @@ func (h *adminHandler) StopGame(c fiber.Ctx) error {
 }
 
 func (h *adminHandler) ResetGame(c fiber.Ctx) error {
-	id := parseID(c.Params("id"))
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
 	game, err := h.gameSvc.GetGame(c.Context(), id)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "game not found"})
@@ -352,7 +374,10 @@ func (h *adminHandler) CreateTeam(c fiber.Ctx) error {
 }
 
 func (h *adminHandler) UpdateTeam(c fiber.Ctx) error {
-	id := parseID(c.Params("id"))
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
 	team, err := h.teamSvc.GetTeam(c.Context(), id)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "team not found"})
@@ -389,7 +414,10 @@ func (h *adminHandler) UpdateTeam(c fiber.Ctx) error {
 }
 
 func (h *adminHandler) DeleteTeam(c fiber.Ctx) error {
-	id := parseID(c.Params("id"))
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
 	team, err := h.teamSvc.GetTeam(c.Context(), id)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "team not found"})
@@ -470,7 +498,10 @@ func (h *adminHandler) BatchImportTeams(c fiber.Ctx) error {
 }
 
 func (h *adminHandler) ResetTeam(c fiber.Ctx) error {
-	id := parseID(c.Params("id"))
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
 	team, err := h.teamSvc.GetTeam(c.Context(), id)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "team not found"})
@@ -529,6 +560,16 @@ func (h *adminHandler) AdjustScore(c fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
 
+	adjustment := model.ScoreAdjustment{
+		GameID:      req.GameID,
+		TeamID:      req.TeamID,
+		AdjustValue: int(req.Amount),
+		Reason:      req.Reason,
+	}
+	if err := db.Create(&adjustment).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "failed to create score adjustment"})
+	}
+
 	// Log the action
 	h.logAdminAction(c, "adjust_score", "score", 0, "Adjusted score for team: "+team.Name, fiber.Map{
 		"game_id": req.GameID,
@@ -552,7 +593,10 @@ func (h *adminHandler) AdjustScore(c fiber.Ctx) error {
 
 // AddTeamToGame adds a team to a specific game
 func (h *adminHandler) AddTeamToGame(c fiber.Ctx) error {
-	gameID := parseID(c.Params("id"))
+	gameID, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
 	var req struct {
 		TeamID int64 `json:"team_id"`
 	}
@@ -596,8 +640,14 @@ func (h *adminHandler) AddTeamToGame(c fiber.Ctx) error {
 
 // RemoveTeamFromGame removes a team from a specific game
 func (h *adminHandler) RemoveTeamFromGame(c fiber.Ctx) error {
-	gameID := parseID(c.Params("id"))
-	teamID := parseID(c.Params("team_id"))
+	gameID, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+	teamID, err := parseID(c.Params("team_id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
 
 	db := database.GetDB()
 
@@ -625,7 +675,10 @@ func (h *adminHandler) RemoveTeamFromGame(c fiber.Ctx) error {
 
 // GetGameTeams gets the list of teams for a specific game
 func (h *adminHandler) GetGameTeams(c fiber.Ctx) error {
-	gameID := parseID(c.Params("id"))
+	gameID, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
 
 	db := database.GetDB()
 
@@ -678,5 +731,3 @@ func (h *adminHandler) GetGameTeams(c fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": response})
 }
-
-

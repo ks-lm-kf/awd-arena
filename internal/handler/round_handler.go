@@ -176,7 +176,10 @@ func (rh *roundHandler) ControlRounds(c fiber.Ctx) error {
 
 	manager, exists := rh.managers[gameID]
 	if !exists {
-		eng := engine.NewCompetitionEngine(&game)
+		eng, err := engine.NewCompetitionEngine(&game)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "failed to create engine", "details": err.Error()})
+		}
 		manager = engine.NewRoundManager(&game, eng)
 		manager.SetCallbacks(eng.GetRoundCallbacks())
 		rh.managers[gameID] = manager

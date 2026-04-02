@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/awd-platform/awd-arena/internal/database"
@@ -18,7 +19,6 @@ var EngineCallbacks struct {
 	ResumeGame func(game *model.Game) error
 	StopGame   func(gameID int64) error
 }
-
 
 // GameService handles game management logic.
 type GameService struct{}
@@ -47,18 +47,18 @@ func (s *GameService) StartGame(ctx context.Context, gameID int64) error {
 	if db == nil {
 		return errors.New("database not initialized")
 	}
-	
+
 	// Get the game object
 	var game model.Game
 	if err := db.First(&game, gameID).Error; err != nil {
 		return errors.New("game not found")
 	}
-	
+
 	now := time.Now()
 	if err := db.Model(&model.Game{}).Where("id = ?", gameID).Updates(map[string]interface{}{
-		"status":       "running",
+		"status":        "running",
 		"current_phase": "running",
-		"start_time":   now,
+		"start_time":    now,
 	}).Error; err != nil {
 		return err
 	}
@@ -78,10 +78,13 @@ func (s *GameService) StartGame(ctx context.Context, gameID int64) error {
 	if EngineCallbacks.StartGame != nil {
 		if err := EngineCallbacks.StartGame(&game); err != nil {
 			logger.Error("failed to start competition engine", "game", gameID, "error", err)
-			// Don't return error here as containers are already being provisioned
-		} else {
-			logger.Info("competition engine started successfully", "game", gameID)
+			db.Model(&model.Game{}).Where("id = ?", gameID).Updates(map[string]interface{}{
+				"status":        "draft",
+				"current_phase": "preparation",
+			})
+			return fmt.Errorf("engine start failed: %w", err)
 		}
+		logger.Info("competition engine started successfully", "game", gameID)
 	} else {
 		logger.Warn("EngineCallbacks.StartGame not set, competition engine not started")
 	}
@@ -127,20 +130,20 @@ func (s *GameService) ResumeGame(ctx context.Context, gameID int64) error {
 	if db == nil {
 		return errors.New("database not initialized")
 	}
-	
+
 	// Get the game object
 	var game model.Game
 	if err := db.First(&game, gameID).Error; err != nil {
 		return errors.New("game not found")
 	}
-	
+
 	if err := db.Model(&model.Game{}).Where("id = ?", gameID).Updates(map[string]interface{}{
 		"status":        "running",
 		"current_phase": "running",
 	}).Error; err != nil {
 		return err
 	}
-	
+
 	// Resume the competition engine
 	game.Status = "running"
 	game.CurrentPhase = "running"
@@ -149,14 +152,14 @@ func (s *GameService) ResumeGame(ctx context.Context, gameID int64) error {
 			logger.Error("failed to resume competition engine", "game", gameID, "error", err)
 		}
 	}
-	
+
 	go func() {
 		csvc := NewContainerService()
 		if err := csvc.ResumeContainers(context.Background(), gameID); err != nil {
 			logger.Error("resume containers failed", "game", gameID, "error", err)
 		}
 	}()
-	
+
 	logger.Info("game resumed", "game", gameID)
 	return nil
 }

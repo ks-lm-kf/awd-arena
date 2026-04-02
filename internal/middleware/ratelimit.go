@@ -1,11 +1,31 @@
 package middleware
 
 import (
+	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
+
+func localToString(v interface{}) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	case int64:
+		return strconv.FormatInt(t, 10)
+	case *int64:
+		if t != nil {
+			return strconv.FormatInt(*t, 10)
+		}
+		return ""
+	case float64:
+		return strconv.FormatFloat(t, 'f', -1, 64)
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
 
 // MultiKeyRateLimiter supports rate limiting by multiple keys (IP, user, endpoint).
 type MultiKeyRateLimiter struct {
@@ -39,6 +59,10 @@ func (rl *MultiKeyRateLimiter) Allow(key string) bool {
 		rl.requests[key] = filtered
 		return false
 	}
+	if len(filtered) == 0 {
+		delete(rl.requests, key)
+		return true
+	}
 	filtered = append(filtered, now)
 	rl.requests[key] = filtered
 	return true
@@ -50,7 +74,9 @@ func RateLimit(limit int, window time.Duration) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		key := c.IP()
 		if teamID := c.Locals("team_id"); teamID != nil {
-			key = "team:" + teamID.(string)
+			if s := localToString(teamID); s != "" {
+				key = "team:" + s
+			}
 		}
 		if !limiter.Allow(key) {
 			return c.Status(429).JSON(fiber.Map{"code": 429, "message": "rate limit exceeded"})
@@ -78,7 +104,9 @@ func FlagSubmitRateLimit(limit int, window time.Duration) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		key := "flag:" + c.IP()
 		if teamID := c.Locals("team_id"); teamID != nil {
-			key = "flag:team:" + teamID.(string)
+			if s := localToString(teamID); s != "" {
+				key = "flag:team:" + s
+			}
 		}
 		if !limiter.Allow(key) {
 			return c.Status(429).JSON(fiber.Map{"code": 429, "message": "flag submit rate limit exceeded"})
@@ -93,7 +121,9 @@ func PerUserRateLimit(limit int, window time.Duration) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		key := c.IP()
 		if userID := c.Locals("user_id"); userID != nil {
-			key = "user:" + userID.(string)
+			if s := localToString(userID); s != "" {
+				key = "user:" + s
+			}
 		}
 		if !limiter.Allow(key) {
 			return c.Status(429).JSON(fiber.Map{"code": 429, "message": "user rate limit exceeded"})

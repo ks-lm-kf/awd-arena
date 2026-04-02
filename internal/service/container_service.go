@@ -158,7 +158,7 @@ func (s *ContainerService) ProvisionContainers(ctx context.Context, gameID int64
 
 	var isoTeamIDs []int64
 	for _, t := range teams {
-		isoTeamIDs = append(teamIDs, t.ID)
+		isoTeamIDs = append(isoTeamIDs, t.ID)
 	}
 	_ = netMgr.IsolateTeams(ctx, isoTeamIDs)
 

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/awd-platform/awd-arena/internal/database"
@@ -28,7 +29,10 @@ func (m *EngineManager) StartGame(game *model.Game) error {
 		return nil
 	}
 
-	eng := NewCompetitionEngine(game)
+	eng, err := NewCompetitionEngine(game)
+	if err != nil {
+		return fmt.Errorf("create engine: %w", err)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	eng.SetCancelFunc(cancel)
 
@@ -66,7 +70,10 @@ func (m *EngineManager) ResumeGame(game *model.Game) error {
 		return eng.Resume(context.Background())
 	}
 
-	eng := NewCompetitionEngine(game)
+	eng, err := NewCompetitionEngine(game)
+	if err != nil {
+		return fmt.Errorf("create engine: %w", err)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	eng.SetCancelFunc(cancel)
 	eng.currentRound = game.CurrentRound
@@ -92,6 +99,7 @@ func (m *EngineManager) StopGame(gameID int64) error {
 
 	ctx := context.Background()
 	eng.Stop(ctx)
+	eng.Close()
 	delete(m.engines, gameID)
 	logger.Info("engine stopped", "game_id", gameID)
 	return nil
@@ -116,6 +124,7 @@ func (m *EngineManager) ShutdownAll() {
 	for id, eng := range m.engines {
 		ctx := context.Background()
 		eng.Stop(ctx)
+		eng.Close()
 		delete(m.engines, id)
 	}
 }

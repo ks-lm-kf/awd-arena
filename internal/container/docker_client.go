@@ -9,19 +9,18 @@ import (
 
 	"github.com/awd-platform/awd-arena/pkg/logger"
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/go-connections/nat"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/docker/go-connections/nat"
 )
 
 // int64Ptr converts int64 to *int64
 func int64Ptr(i int64) *int64 {
 	return &i
 }
-
 
 // DockerClientImpl implements DockerClient using the Docker SDK.
 type DockerClientImpl struct {
@@ -69,7 +68,7 @@ func (d *DockerClientImpl) CreateContainer(ctx context.Context, opts CreateOptio
 		SecurityOpt:   []string{"no-new-privileges:true"},
 		CapDrop:       []string{"ALL"},
 		CapAdd:        []string{"NET_BIND_SERVICE", "CHOWN", "SETUID", "SETGID", "DAC_OVERRIDE"},
-			}
+	}
 
 	networkingConfig := &network.NetworkingConfig{}
 	if opts.IPAddress != "" {
@@ -96,7 +95,7 @@ func (d *DockerClientImpl) CreateContainer(ctx context.Context, opts CreateOptio
 	if err != nil {
 		return "", fmt.Errorf("container create: %w", err)
 	}
-	
+
 	logger.Info("container created with disk quota", "id", resp.ID[:12], "disk_quota", diskQuota)
 	return resp.ID, nil
 }
@@ -339,7 +338,7 @@ func (d *DockerClientImpl) Logs(ctx context.Context, id string, opts LogOptions)
 // LogsStream streams container logs in real-time.
 func (d *DockerClientImpl) LogsStream(ctx context.Context, id string, opts LogOptions) (io.ReadCloser, error) {
 	options := container.LogsOptions{
-		ShowStdout: opts.ShowStderr,
+		ShowStdout: opts.ShowStdout,
 		ShowStderr: opts.ShowStderr,
 		Since:      opts.Since,
 		Tail:       opts.Tail,

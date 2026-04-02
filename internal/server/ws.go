@@ -19,48 +19,57 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
+// wsConn wraps a websocket connection with a write mutex for concurrent safety.
+type wsConn struct {
+	conn *websocket.Conn
+	mu   sync.Mutex
+}
+
 // WSHub manages WebSocket connections and game subscriptions.
 type WSHub struct {
 	mu      sync.RWMutex
-	clients map[*websocket.Conn]struct{}
-	gameSub map[string]map[*websocket.Conn]struct{}
+	clients map[*wsConn]struct{}
+	gameSub map[string]map[*wsConn]struct{}
 }
 
 // Hub is the global WebSocket hub instance.
 var Hub = &WSHub{
-	clients: make(map[*websocket.Conn]struct{}),
-	gameSub: make(map[string]map[*websocket.Conn]struct{}),
+	clients: make(map[*wsConn]struct{}),
+	gameSub: make(map[string]map[*wsConn]struct{}),
 }
 
-func (h *WSHub) Register(conn *websocket.Conn) {
+func (h *WSHub) Register(wc *wsConn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.clients[conn] = struct{}{}
+	h.clients[wc] = struct{}{}
 }
 
-func (h *WSHub) Unregister(conn *websocket.Conn) {
+func (h *WSHub) Unregister(wc *wsConn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	delete(h.clients, conn)
+	delete(h.clients, wc)
 	for gameID := range h.gameSub {
-		delete(h.gameSub[gameID], conn)
+		delete(h.gameSub[gameID], wc)
 	}
 }
 
-func (h *WSHub) Subscribe(gameID string, conn *websocket.Conn) {
+func (h *WSHub) Subscribe(gameID string, wc *wsConn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.gameSub[gameID] == nil {
-		h.gameSub[gameID] = make(map[*websocket.Conn]struct{})
+		h.gameSub[gameID] = make(map[*wsConn]struct{})
 	}
-	h.gameSub[gameID][conn] = struct{}{}
+	h.gameSub[gameID][wc] = struct{}{}
 }
 
 func (h *WSHub) BroadcastToGame(gameID string, message []byte) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	for conn := range h.gameSub[gameID] {
-		if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
+	for wc := range h.gameSub[gameID] {
+		wc.mu.Lock()
+		err := wc.conn.WriteMessage(websocket.TextMessage, message)
+		wc.mu.Unlock()
+		if err != nil {
 			logger.Error("ws write error", "error", err)
 		}
 	}
@@ -69,8 +78,11 @@ func (h *WSHub) BroadcastToGame(gameID string, message []byte) {
 func (h *WSHub) Broadcast(message []byte) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	for conn := range h.clients {
-		if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
+	for wc := range h.clients {
+		wc.mu.Lock()
+		err := wc.conn.WriteMessage(websocket.TextMessage, message)
+		wc.mu.Unlock()
+		if err != nil {
 			logger.Error("ws broadcast error", "error", err)
 		}
 	}
@@ -125,9 +137,10 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		logger.Error("ws upgrade error", "error", err)
 		return
 	}
+	wc := &wsConn{conn: conn}
 	defer conn.Close()
-	Hub.Register(conn)
-	defer Hub.Unregister(conn)
+	Hub.Register(wc)
+	defer Hub.Unregister(wc)
 
 	for {
 		_, msg, err := conn.ReadMessage()
@@ -142,7 +155,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		case "subscribe":
 			if ch, ok := wsMsg.Data.(map[string]interface{}); ok {
 				if channel, ok := ch["channel"].(string); ok {
-					Hub.Subscribe(channel, conn)
+					Hub.Subscribe(channel, wc)
 				}
 			}
 		case "unsubscribe":

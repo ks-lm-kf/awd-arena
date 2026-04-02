@@ -18,7 +18,7 @@ func TestNewRoundManager(t *testing.T) {
 		TotalRounds:   3,
 	}
 	
-	engine := NewCompetitionEngine(game)
+	engine, _ := NewCompetitionEngine(game)
 	manager := NewRoundManager(game, engine)
 	
 	if manager == nil {
@@ -51,7 +51,7 @@ func TestRoundManager_StartStop(t *testing.T) {
 		TotalRounds:   3,
 	}
 	
-	engine := NewCompetitionEngine(game)
+	engine, _ := NewCompetitionEngine(game)
 	manager := NewRoundManager(game, engine)
 	
 	ctx := context.Background()
@@ -93,7 +93,7 @@ func TestRoundManager_PauseResume(t *testing.T) {
 		TotalRounds:   3,
 	}
 	
-	engine := NewCompetitionEngine(game)
+	engine, _ := NewCompetitionEngine(game)
 	manager := NewRoundManager(game, engine)
 	
 	ctx := context.Background()
@@ -143,7 +143,7 @@ func TestRoundManager_GetState(t *testing.T) {
 		TotalRounds:   3,
 	}
 	
-	engine := NewCompetitionEngine(game)
+	engine, _ := NewCompetitionEngine(game)
 	manager := NewRoundManager(game, engine)
 	
 	// Get initial state
@@ -197,7 +197,7 @@ func TestRoundManager_UpdateDurations(t *testing.T) {
 		TotalRounds:   3,
 	}
 	
-	engine := NewCompetitionEngine(game)
+	engine, _ := NewCompetitionEngine(game)
 	manager := NewRoundManager(game, engine)
 	
 	// Update durations
@@ -223,7 +223,7 @@ func TestRoundManager_Callbacks(t *testing.T) {
 		TotalRounds:   2,
 	}
 	
-	engine := NewCompetitionEngine(game)
+	engine, _ := NewCompetitionEngine(game)
 	manager := NewRoundManager(game, engine)
 	
 	var mu sync.Mutex
@@ -280,7 +280,7 @@ func TestRoundManager_PauseAdjustsTiming(t *testing.T) {
 		TotalRounds:   1,
 	}
 	
-	engine := NewCompetitionEngine(game)
+	engine, _ := NewCompetitionEngine(game)
 	manager := NewRoundManager(game, engine)
 	
 	ctx := context.Background()
@@ -320,7 +320,7 @@ func TestRoundManager_ConcurrentAccess(t *testing.T) {
 		TotalRounds:   10,
 	}
 	
-	engine := NewCompetitionEngine(game)
+	engine, _ := NewCompetitionEngine(game)
 	manager := NewRoundManager(game, engine)
 	
 	ctx := context.Background()

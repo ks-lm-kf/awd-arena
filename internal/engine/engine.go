@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -35,17 +36,13 @@ type CompetitionEngine struct {
 }
 
 // NewCompetitionEngine creates a new engine instance.
-func NewCompetitionEngine(game *model.Game) *CompetitionEngine {
-	// Initialize Docker client for flag writing
+func NewCompetitionEngine(game *model.Game) (*CompetitionEngine, error) {
 	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		logger.Error("failed to create docker client for engine", "error", err)
+		return nil, fmt.Errorf("docker client init: %w", err)
 	}
 
-	var flagWriter *FlagWriter
-	if dockerClient != nil {
-		flagWriter = NewFlagWriter(dockerClient)
-	}
+	flagWriter := NewFlagWriter(dockerClient)
 
 	return &CompetitionEngine{
 		game:          game,
@@ -58,7 +55,7 @@ func NewCompetitionEngine(game *model.Game) *CompetitionEngine {
 		currentPhase:  "preparation",
 		dockerClient:  dockerClient,
 		flagWriter:    flagWriter,
-	}
+	}, nil
 }
 
 func (e *CompetitionEngine) Start(ctx context.Context) error {
@@ -184,6 +181,13 @@ func (e *CompetitionEngine) GetCurrentPhase() string { return e.currentPhase }
 func (e *CompetitionEngine) GetGame() *model.Game    { return e.game }
 func (e *CompetitionEngine) IsRunning() bool         { return e.running }
 
+// Close releases resources held by the engine, including the Docker client.
+func (e *CompetitionEngine) Close() {
+	if e.dockerClient != nil {
+		e.dockerClient.Close()
+	}
+}
+
 func (e *CompetitionEngine) onRoundStart(ctx context.Context, round int) error {
 	e.currentRound = round
 	e.currentPhase = "running"
@@ -192,7 +196,7 @@ func (e *CompetitionEngine) onRoundStart(ctx context.Context, round int) error {
 	db := database.GetDB()
 	if db != nil {
 		db.Model(&model.Game{}).Where("id = ?", e.game.ID).Updates(map[string]interface{}{
-			"current_round":  round,
+			"current_round": round,
 			"current_phase": "running",
 		})
 	}

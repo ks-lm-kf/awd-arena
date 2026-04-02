@@ -24,7 +24,7 @@ export default function AttackPanelPage() {
 
   const { subscribe } = useWebSocket()
 
-  useEffect(() => { gameApi.list().then(setGames).catch(() => {}) }, [])
+  useEffect(() => { gameApi.list().then(setGames).catch((err) => { console.error('Failed to load data:', err); message.error('加载数据失败') }) }, [])
 
   const activeGame = games.find((g) => g.status === 'running' || g.status === 'paused')
   useEffect(() => {
@@ -34,23 +34,20 @@ export default function AttackPanelPage() {
   useEffect(() => {
     if (!selectedGame) return
     setMachinesLoading(true)
-    fetch(`/api/v1/games/${selectedGame}/my-machines`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-    })
-      .then(res => res.json())
-      .then(res => { setMachines(res.data || []); setMachinesLoading(false) })
-      .catch(() => setMachinesLoading(false))
+    containerApi.getMyMachines(selectedGame)
+      .then((data) => { setMachines(data || []); setMachinesLoading(false) })
+      .catch((err) => { console.error('Failed to load machines:', err); setMachinesLoading(false) })
   }, [selectedGame])
 
   useEffect(() => {
     if (!selectedGame) return
-    flagApi.history(selectedGame).then(setHistory).catch(() => {})
+    flagApi.history(selectedGame).then(setHistory).catch((err) => { console.error('Failed to load data:', err); message.error('加载数据失败') })
   }, [selectedGame])
 
   useEffect(() => {
     if (!selectedGame) return
     const unsub = subscribe('flag:captured', () => {
-      flagApi.history(selectedGame).then(setHistory).catch(() => {})
+      flagApi.history(selectedGame).then(setHistory).catch((err) => { console.error('Failed to load data:', err); message.error('加载数据失败') })
     })
     return unsub
   }, [selectedGame, subscribe])
@@ -62,7 +59,7 @@ export default function AttackPanelPage() {
       const result = await flagApi.submit(selectedGame, { flag: flagInput.trim(), target_team_id: targetTeamId })
       if (result.is_correct) { message.success(`Flag 正确！+${result.points_earned} 分`); setFlagInput('') }
       else { message.error('Flag 错误') }
-      flagApi.history(selectedGame).then(setHistory).catch(() => {})
+      flagApi.history(selectedGame).then(setHistory).catch((err) => { console.error('Failed to load data:', err); message.error('加载数据失败') })
     } catch (err: any) { message.error(err?.response?.data?.message || '提交失败') }
     finally { setSubmitting(false) }
   }
@@ -105,7 +102,7 @@ export default function AttackPanelPage() {
         </Space.Compact>
       </Card>
       <Card title={<Space><HistoryOutlined />提交历史</Space>} style={{ background: '#1a1a2e', borderColor: '#2a2a4a' }}>
-        <Table dataSource={history} columns={historyColumns} rowKey={(r: any) => r.id || Math.random()} pagination={{ pageSize: 10 }} size="small" />
+        <Table dataSource={history} columns={historyColumns} rowKey={(r: any, index: number) => r.id || String(index)} pagination={{ pageSize: 10 }} size="small" />
       </Card>
     </div>
   )

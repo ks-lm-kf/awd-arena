@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -19,11 +20,12 @@ type WebSocketConfig struct {
 
 // WebSocketNotifier WebSocket 通知器
 type WebSocketNotifier struct {
-	config    WebSocketConfig
-	conn      *websocket.Conn
-	mu        sync.RWMutex
-	connected bool
-	stopChan  chan struct{}
+	config     WebSocketConfig
+	conn       *websocket.Conn
+	mu         sync.RWMutex
+	connected  bool
+	stopChan   chan struct{}
+	connCancel context.CancelFunc
 }
 
 // NewWebSocketNotifier 创建 WebSocket 通知器
@@ -93,8 +95,13 @@ func (wn *WebSocketNotifier) connect() error {
 	wn.conn = conn
 	wn.connected = true
 
-	// 启动 ping 保持连接
-	go wn.pingLoop()
+	if wn.connCancel != nil {
+		wn.connCancel()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	wn.connCancel = cancel
+
+	go wn.pingLoopWithContext(ctx)
 
 	return nil
 }
@@ -106,8 +113,8 @@ func (wn *WebSocketNotifier) isConnected() bool {
 	return wn.connected
 }
 
-// pingLoop 发送 ping 保持连接
-func (wn *WebSocketNotifier) pingLoop() {
+// pingLoopWithContext sends periodic pings, stopping when ctx is cancelled.
+func (wn *WebSocketNotifier) pingLoopWithContext(ctx context.Context) {
 	ticker := time.NewTicker(wn.config.PingInterval)
 	defer ticker.Stop()
 
@@ -124,6 +131,8 @@ func (wn *WebSocketNotifier) pingLoop() {
 			}
 			wn.mu.Unlock()
 		case <-wn.stopChan:
+			return
+		case <-ctx.Done():
 			return
 		}
 	}
@@ -171,14 +180,14 @@ func (wn *WebSocketNotifier) Send(alert Alert) error {
 // Close 关闭连接
 func (wn *WebSocketNotifier) Close() error {
 	close(wn.stopChan)
-	
+
 	wn.mu.Lock()
 	defer wn.mu.Unlock()
 
 	if wn.conn != nil {
 		return wn.conn.Close()
 	}
-	
+
 	return nil
 }
 

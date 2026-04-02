@@ -145,14 +145,18 @@ func (hc *HealthChecker) checkContainer(ctx context.Context, tc *model.TeamConta
 
 	// 2. Track failure counts
 	containerDBID := tc.ID
+	hc.mu.Lock()
 	if newStatus != "running" {
 		hc.failCount[containerDBID]++
 	} else {
 		hc.failCount[containerDBID] = 0
 	}
+	hc.mu.Unlock()
 
 	// 3. Detect status change
+	hc.mu.Lock()
 	prevStatus, hadPrev := hc.prevStatus[containerDBID]
+	hc.mu.Unlock()
 	statusChanged := !hadPrev || prevStatus != newStatus
 
 	// 4. Update TeamContainer.Status in DB
@@ -164,7 +168,9 @@ func (hc *HealthChecker) checkContainer(ctx context.Context, tc *model.TeamConta
 			"old_status", prevStatus,
 			"new_status", newStatus)
 	}
+	hc.mu.Lock()
 	hc.prevStatus[containerDBID] = newStatus
+	hc.mu.Unlock()
 
 	// 5. Record to ServiceHealth table
 	if db != nil {
@@ -176,8 +182,10 @@ func (hc *HealthChecker) checkContainer(ctx context.Context, tc *model.TeamConta
 			ErrorMsg:     errMsg,
 			CreatedAt:    time.Now(),
 		}
-		// Only store if there's a meaningful status
-		if newStatus != "running" || hc.failCount[containerDBID] > 0 {
+		hc.mu.Lock()
+		shouldStore := newStatus != "running" || hc.failCount[containerDBID] > 0
+		hc.mu.Unlock()
+		if shouldStore {
 			db.Create(&healthRecord)
 		}
 	}
@@ -187,12 +195,12 @@ func (hc *HealthChecker) checkContainer(ctx context.Context, tc *model.TeamConta
 		// Publish container:status event via EventBus
 		bus := eventbus.GetBus()
 		_ = bus.Publish(context.Background(), "container:status", map[string]interface{}{
-			"game_id":       hc.gameID,
-			"team_id":       tc.TeamID,
-			"container_id":  tc.ContainerID,
-			"status":        newStatus,
-			"previous":      prevStatus,
-			"error":         errMsg,
+			"game_id":      hc.gameID,
+			"team_id":      tc.TeamID,
+			"container_id": tc.ContainerID,
+			"status":       newStatus,
+			"previous":     prevStatus,
+			"error":        errMsg,
 		})
 
 		// Write EventLog

@@ -42,7 +42,7 @@ export interface UpdateTemplateRequest extends Partial<CreateTemplateRequest> {
 
 export const templateApi = {
   list: async (page: number = 1, pageSize: number = 20): Promise<TemplateListResponse> => {
-    const response = await client.get(`/api/v1/templates`, {
+    const response = await client.get(`/templates`, {
       params: {
         page,
         page_size: pageSize,
@@ -52,22 +52,22 @@ export const templateApi = {
   },
 
   get: async (id: number): Promise<ChallengeTemplate> => {
-    const response = await client.get(`/api/v1/templates/${id}`);
+    const response = await client.get(`/templates/${id}`);
     return response.data;
   },
 
   create: async (data: CreateTemplateRequest): Promise<ChallengeTemplate> => {
-    const response = await client.post(`/api/v1/templates`, data);
+    const response = await client.post(`/templates`, data);
     return response.data;
   },
 
   update: async (id: number, data: Partial<CreateTemplateRequest>): Promise<ChallengeTemplate> => {
-    const response = await client.put(`/api/v1/templates/${id}`, data);
+    const response = await client.put(`/templates/${id}`, data);
     return response.data;
   },
 
   delete: async (id: number): Promise<void> => {
-    await client.delete(`/api/v1/templates/${id}`);
+    await client.delete(`/templates/${id}`);
   },
 };
 

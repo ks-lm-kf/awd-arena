@@ -30,7 +30,7 @@ export interface User {
   id: number
   username: string
   email: string
-  role: 'admin' | 'judge' | 'player'
+  role: 'admin' | 'organizer' | 'player'
   team_id: number | null
   team_name?: string
   created_at: string

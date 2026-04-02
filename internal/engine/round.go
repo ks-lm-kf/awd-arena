@@ -65,10 +65,15 @@ func (rs *RoundScheduler) Run(ctx context.Context) {
 	rs.pauseCtx, rs.pauseCancel = context.WithCancel(ctx)
 	rs.mu.Unlock()
 
-	roundTimer := time.NewTimer(rs.engine.roundDuration)
+	rs.engine.mu.Lock()
+	roundDuration := rs.engine.roundDuration
+	currentRound := rs.engine.currentRound
+	rs.engine.mu.Unlock()
+
+	roundTimer := time.NewTimer(roundDuration)
 	defer roundTimer.Stop()
 
-	logger.Info("round scheduler running", "current_round", rs.engine.currentRound)
+	logger.Info("round scheduler running", "current_round", currentRound)
 
 	for {
 		select {
@@ -80,21 +85,40 @@ func (rs *RoundScheduler) Run(ctx context.Context) {
 				return
 			}
 
-			logger.Info("round ended", "round", rs.engine.currentRound)
-			if err := rs.engine.onRoundEnd(ctx, rs.engine.currentRound); err != nil {
+			rs.engine.mu.Lock()
+			currentRound = rs.engine.currentRound
+			rs.engine.mu.Unlock()
+
+			logger.Info("round ended", "round", currentRound)
+
+			rs.engine.mu.Lock()
+			if err := rs.engine.onRoundEnd(ctx, currentRound); err != nil {
 				logger.Error("round end error", "error", err)
 			}
-			rs.broadcastRoundEnd(rs.engine.currentRound)
+			rs.engine.mu.Unlock()
 
-			if rs.engine.currentRound >= rs.engine.totalRounds {
+			rs.broadcastRoundEnd(currentRound)
+
+			rs.engine.mu.Lock()
+			currentRound = rs.engine.currentRound
+			totalRounds := rs.engine.totalRounds
+			rs.engine.mu.Unlock()
+
+			if currentRound >= totalRounds {
+				rs.engine.mu.Lock()
 				rs.engine.currentPhase = "finished"
-				logger.Info("game finished", "rounds", rs.engine.totalRounds)
+				rs.engine.mu.Unlock()
+				logger.Info("game finished", "rounds", totalRounds)
 				rs.broadcastGameFinished()
 				return
 			}
 
+			rs.engine.mu.Lock()
 			rs.engine.currentPhase = "break"
-			breakTimer := time.NewTimer(rs.engine.breakDuration)
+			breakDuration := rs.engine.breakDuration
+			rs.engine.mu.Unlock()
+
+			breakTimer := time.NewTimer(breakDuration)
 			select {
 			case <-ctx.Done():
 				breakTimer.Stop()
@@ -102,18 +126,29 @@ func (rs *RoundScheduler) Run(ctx context.Context) {
 			case <-breakTimer.C:
 			}
 
-			nextRound := rs.engine.currentRound + 1
+			rs.engine.mu.Lock()
+			currentRound = rs.engine.currentRound
+			rs.engine.mu.Unlock()
+			nextRound := currentRound + 1
+
 			logger.Info("round starting", "round", nextRound)
 
 			rs.mu.Lock()
 			rs.roundStart = time.Now()
 			rs.mu.Unlock()
 
+			rs.engine.mu.Lock()
 			if err := rs.engine.onRoundStart(ctx, nextRound); err != nil {
 				logger.Error("round start error", "error", err)
 			}
+			rs.engine.mu.Unlock()
+
 			rs.broadcastRoundStart(nextRound)
-			roundTimer.Reset(rs.engine.roundDuration)
+
+			rs.engine.mu.Lock()
+			roundDuration = rs.engine.roundDuration
+			rs.engine.mu.Unlock()
+			roundTimer.Reset(roundDuration)
 		}
 	}
 }
@@ -161,8 +196,11 @@ func (rs *RoundScheduler) broadcastRoundEnd(round int) {
 }
 
 func (rs *RoundScheduler) broadcastGameFinished() {
+	rs.engine.mu.Lock()
+	totalRounds := rs.engine.totalRounds
+	rs.engine.mu.Unlock()
 	bus := eventbus.GetBus()
 	_ = bus.Publish(context.Background(), "game:finished", map[string]interface{}{
-		"rounds": rs.engine.totalRounds,
+		"rounds": totalRounds,
 	})
 }

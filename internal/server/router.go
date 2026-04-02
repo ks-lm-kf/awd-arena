@@ -1,6 +1,8 @@
 package server
 
 import (
+	"time"
+
 	"github.com/awd-platform/awd-arena/internal/handler"
 	"github.com/awd-platform/awd-arena/internal/middleware"
 	"github.com/awd-platform/awd-arena/internal/model"
@@ -78,7 +80,7 @@ func RegisterRoutes(app *fiber.App) {
 
 	// Flags - Players can submit flags
 	flags := v1.Group("/games/:id/flags", middleware.JWTAuth())
-	flags.Post("/submit", middleware.FlagSubmitRateLimit(100, 60), middleware.RequirePermission(model.PermSubmitFlag), handler.FlagHandler.Submit)
+	flags.Post("/submit", middleware.FlagSubmitRateLimit(100, 60*time.Second), middleware.RequirePermission(model.PermSubmitFlag), handler.FlagHandler.Submit)
 	flags.Get("/history", middleware.RequirePermission(model.PermViewOwnStats), handler.FlagHandler.History)
 
 	// Rankings - All authenticated users can view

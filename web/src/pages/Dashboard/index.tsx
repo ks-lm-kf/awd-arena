@@ -44,7 +44,10 @@ export default function DashboardPage() {
         const r = await rankingApi.list(running.id)
         setRankings(r)
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      console.error('Failed to load data:', err);
+      message.error('加载数据失败');
+    }
   }
 
   useEffect(() => { loadData() }, [])

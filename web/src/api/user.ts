@@ -5,13 +5,13 @@ export interface CreateUserRequest {
   username: string
   password: string
   email?: string
-  role?: 'admin' | 'judge' | 'player'
+  role?: 'admin' | 'organizer' | 'player'
   team_id?: number
 }
 
 export interface UpdateUserRequest {
   email?: string
-  role?: 'admin' | 'judge' | 'player'
+  role?: 'admin' | 'organizer' | 'player'
   team_id?: number
 }
 

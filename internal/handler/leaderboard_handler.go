@@ -34,7 +34,10 @@ type LeaderboardResponse struct {
 
 // Get returns the current leaderboard for a game
 func (h *leaderboardHandler) Get(c fiber.Ctx) error {
-	gameID := parseID(c.Params("id"))
+	gameID, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
 	db := database.GetDB()
 	if db == nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "database not available"})
@@ -48,8 +51,11 @@ func (h *leaderboardHandler) Get(c fiber.Ctx) error {
 
 // GetRound returns rankings for a specific round
 func (h *leaderboardHandler) GetRound(c fiber.Ctx) error {
-	gameID := parseID(c.Params("id"))
-	round := parseID(c.Params("round"))
+	gameID, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+	round, _ := parseID(c.Params("round"))
 	db := database.GetDB()
 	if db == nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "database not available"})
@@ -71,7 +77,10 @@ func (h *leaderboardHandler) GetRound(c fiber.Ctx) error {
 
 // GetHistory returns historical rankings
 func (h *leaderboardHandler) GetHistory(c fiber.Ctx) error {
-	gameID := parseID(c.Params("id"))
+	gameID, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
 	db := database.GetDB()
 	if db == nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "database not available"})
@@ -133,7 +142,9 @@ func (h *leaderboardHandler) buildLeaderboard(db *gorm.DB, gameID int64) ([]mode
 		})
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].TotalScore > entries[j].TotalScore })
-	for i := range entries { entries[i].Rank = i + 1 }
+	for i := range entries {
+		entries[i].Rank = i + 1
+	}
 	return entries, nil
 }
 
@@ -141,6 +152,8 @@ func (h *leaderboardHandler) getTeamMap(db *gorm.DB) map[int64]string {
 	var teams []model.Team
 	db.Find(&teams)
 	m := make(map[int64]string, len(teams))
-	for _, t := range teams { m[t.ID] = t.Name }
+	for _, t := range teams {
+		m[t.ID] = t.Name
+	}
 	return m
 }

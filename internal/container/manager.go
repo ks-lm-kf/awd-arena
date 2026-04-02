@@ -2,12 +2,14 @@ package container
 
 import (
 	"context"
+	crand "crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
 	"strconv"
+	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/awd-platform/awd-arena/internal/model"
 	"github.com/awd-platform/awd-arena/pkg/logger"
@@ -48,15 +50,15 @@ type ContainerStore interface {
 
 // CreateOptions holds container creation parameters.
 type CreateOptions struct {
-	Image       string
-	Name        string
-	Cmd         []string
-	Env         []string
-	NetworkID   string
-	IPAddress   string
-	Ports       map[int]int // container port -> host port
-	Resources   ResourceLimit
-	AutoRemove  bool
+	Image      string
+	Name       string
+	Cmd        []string
+	Env        []string
+	NetworkID  string
+	IPAddress  string
+	Ports      map[int]int // container port -> host port
+	Resources  ResourceLimit
+	AutoRemove bool
 }
 
 // ContainerInfo holds container inspection data.
@@ -124,6 +126,13 @@ func (m *ContainerManager) CreateChallengeContainer(ctx context.Context, teamID 
 		}
 	}
 
+	sanitizedTeamName := strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '-' {
+			return r
+		}
+		return '_'
+	}, teamName)
+
 	opts := CreateOptions{
 		Image:      imageRef,
 		Name:       containerName,
@@ -136,7 +145,7 @@ func (m *ContainerManager) CreateChallengeContainer(ctx context.Context, teamID 
 			fmt.Sprintf("AWD_TEAM_ID=%d", teamID),
 			fmt.Sprintf("AWD_GAME_ID=%d", gameID),
 			fmt.Sprintf("AWD_CHALLENGE_ID=%d", challenge.ID),
-			fmt.Sprintf("AWD_TEAM_NAME=%s", teamName),
+			fmt.Sprintf("AWD_TEAM_NAME=%s", sanitizedTeamName),
 		},
 	}
 
@@ -189,13 +198,12 @@ func (m *ContainerManager) CreateChallengeContainer(ctx context.Context, teamID 
 		return nil, fmt.Errorf("save container record: %w", err)
 	}
 
-
 	// === 创建SSH用户 ===
 	sshCreateCmd := []string{
 		"sh", "-c",
 		fmt.Sprintf("useradd -m -s /bin/bash awd && echo 'awd:%s' | chpasswd && usermod -aG sudo awd", sshPassword),
 	}
-	
+
 	execID, sshErr := m.client.ExecCreate(ctx, containerID, sshCreateCmd)
 	if sshErr != nil {
 		logger.Error("failed to create exec for SSH user", "container", containerID, "error", sshErr)
@@ -396,13 +404,21 @@ func trimSpace(s string) string {
 	return s[i:j]
 }
 
-
 // generateRandomPassword 生成随机密码
 func generateRandomPassword(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	const max = 256 - (256 % len(charset))
 	b := make([]byte, length)
 	for i := range b {
-		b[i] = charset[rand.Intn(len(charset))]
+		for {
+			buf := make([]byte, 1)
+			crand.Read(buf)
+			v := int(buf[0])
+			if v < max {
+				b[i] = charset[v%len(charset)]
+				break
+			}
+		}
 	}
 	return string(b)
 }

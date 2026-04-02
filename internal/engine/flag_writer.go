@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/awd-platform/awd-arena/pkg/logger"
@@ -47,7 +48,10 @@ func (fw *FlagWriter) WriteFlag(ctx context.Context, containerID, flag string, c
 		AttachStderr: true,
 		Cmd: []string{
 			"sh", "-c",
-			fmt.Sprintf("echo '%s' > %s && chmod 600 %s", flag, path, path),
+			fmt.Sprintf("printf '%%s' '%s' > '%s' && chmod 600 '%s'",
+				strings.ReplaceAll(flag, "'", "'\\''"),
+				strings.ReplaceAll(path, "'", "'\\''"),
+				strings.ReplaceAll(path, "'", "'\\''")),
 		},
 		User: "root",
 	}

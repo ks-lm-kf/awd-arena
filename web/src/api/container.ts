@@ -1,4 +1,5 @@
 import { get, post, del } from './client'
+import type { TeamContainer } from '@/types'
 
 export interface Container {
   id: number
@@ -32,6 +33,10 @@ export const containerApi = {
   // Get containers for current user's team
   getMyContainers: (gameId: number) =>
     get<Container[]>(`/games/${gameId}/containers`),
+
+  // Get my machines for attack panel (player view)
+  getMyMachines: (gameId: number) =>
+    get<TeamContainer[]>(`/games/${gameId}/my-machines`),
 
   // Get container detail
   getContainerDetail: (containerId: number) =>

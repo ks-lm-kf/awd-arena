@@ -11,6 +11,7 @@ import (
 	"github.com/awd-platform/awd-arena/internal/model"
 	"github.com/awd-platform/awd-arena/pkg/crypto"
 	"github.com/awd-platform/awd-arena/pkg/logger"
+	"gorm.io/gorm"
 )
 
 const BaseAttackPoints = 10
@@ -111,13 +112,6 @@ func (s *FlagService) SubmitFlag(ctx context.Context, gameID, round, attackerTea
 		return false, 0, nil
 	}
 
-	var existing model.FlagSubmission
-	err = db.Where("game_id = ? AND round = ? AND attacker_team = ? AND target_team = ? AND is_correct = ?",
-		gameID, round, attackerTeam, flagRecord.TeamID, true).First(&existing).Error
-	if err == nil {
-		return true, 0, nil
-	}
-
 	var game model.Game
 	db.First(&game, gameID)
 	points := float64(BaseAttackPoints) * game.AttackWeight
@@ -132,10 +126,25 @@ func (s *FlagService) SubmitFlag(ctx context.Context, gameID, round, attackerTea
 		PointsEarned: points,
 		SubmittedAt:  time.Now(),
 	}
-	db.Create(&submission)
 
-	db.Model(&model.Team{}).Where("id = ?", attackerTeam).
-		Update("score", db.Raw("COALESCE(score, 0) + ?", points))
+	err = db.Transaction(func(tx *gorm.DB) error {
+		var existing int64
+		tx.Model(&model.FlagSubmission{}).Where(
+			"game_id = ? AND round = ? AND attacker_team = ? AND target_team = ? AND is_correct = ?",
+			gameID, round, attackerTeam, flagRecord.TeamID, true,
+		).Count(&existing)
+		if existing > 0 {
+			return errors.New("already submitted")
+		}
+		return tx.Create(&submission).Error
+	})
+	if err != nil {
+		if err.Error() == "already submitted" {
+			return true, 0, nil
+		}
+		logger.Error("failed to create flag submission", "error", err)
+		return false, 0, fmt.Errorf("failed to record flag submission: %w", err)
+	}
 
 	// WebSocket push
 	eventbus.BroadcastJSON("flag:captured", map[string]interface{}{
