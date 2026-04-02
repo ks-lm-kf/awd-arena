@@ -46,9 +46,13 @@ func (s *RankingService) GetRankings(ctx context.Context, gameID int64) ([]Ranki
 	}
 
 	items := make([]RankingItem, len(teams))
+	rank := 1
 	for i, t := range teams {
+		if i > 0 && t.Score < teams[i-1].Score {
+			rank = i + 1
+		}
 		items[i] = RankingItem{
-			Rank:        i + 1,
+			Rank:        rank,
 			TeamID:      t.ID,
 			TeamName:    t.Name,
 			Score:       t.Score,

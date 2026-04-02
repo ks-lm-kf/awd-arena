@@ -117,6 +117,16 @@ func (h *authHandler) Login(c fiber.Ctx) error {
 }
 
 func (h *authHandler) Logout(c fiber.Ctx) error {
+	authHeader := c.Get("Authorization")
+	if authHeader != "" {
+		tokenString := authHeader
+		if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+			tokenString = authHeader[7:]
+		}
+		if tokenString != "" {
+			middleware.BlacklistToken(tokenString)
+		}
+	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok"})
 }
 
@@ -286,7 +296,7 @@ type gameHandler struct {
 func (h *gameHandler) List(c fiber.Ctx) error {
 	games, err := h.svc.ListGames(c.Context())
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": games})
 }
@@ -384,7 +394,7 @@ func (h *gameHandler) Create(c fiber.Ctx) error {
 	}
 
 	if err := h.svc.CreateGame(c.Context(), game); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.Status(201).JSON(fiber.Map{"code": 0, "message": "ok", "data": game})
 }
@@ -440,7 +450,7 @@ func (h *gameHandler) Update(c fiber.Ctx) error {
 		game.DefenseWeight = req.DefenseWeight
 	}
 	if err := h.svc.UpdateGame(c.Context(), game); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": game})
 }
@@ -451,7 +461,7 @@ func (h *gameHandler) Start(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 	}
 	if err := h.svc.StartGame(c.Context(), id); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "game started"})
 }
@@ -462,7 +472,7 @@ func (h *gameHandler) Pause(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 	}
 	if err := h.svc.PauseGame(c.Context(), id); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "game paused"})
 }
@@ -473,7 +483,7 @@ func (h *gameHandler) Stop(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 	}
 	if err := h.svc.StopGame(c.Context(), id); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "game stopped"})
 }
@@ -497,7 +507,7 @@ func (h *gameHandler) Reset(c fiber.Ctx) error {
 
 	if err := h.svc.ResetGame(c.Context(), id); err != nil {
 		logger.Error("failed to reset game", "game_id", id, "error", err)
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": fmt.Sprintf("reset failed: %s", err.Error())})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
 	logger.Info("game reset successfully", "game_id", id)
@@ -519,7 +529,7 @@ func (h *gameHandler) Delete(c fiber.Ctx) error {
 	// 删除游戏
 	db := database.GetDB()
 	if err := db.Delete(&model.Game{}, id).Error; err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
 	return c.JSON(fiber.Map{"code": 0, "message": "deleted"})
@@ -534,7 +544,17 @@ type teamHandler struct {
 func (h *teamHandler) List(c fiber.Ctx) error {
 	teams, err := h.svc.ListTeams(c.Context())
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
+	}
+	_, _, role, _ := middleware.GetCurrentUser(c)
+	if role != model.RoleAdmin {
+		for i := range teams {
+			if len(teams[i].Token) > 4 {
+				teams[i].Token = teams[i].Token[:4] + "****"
+			} else if teams[i].Token != "" {
+				teams[i].Token = "****"
+			}
+		}
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": teams})
 }
@@ -547,6 +567,14 @@ func (h *teamHandler) Get(c fiber.Ctx) error {
 	team, err := h.svc.GetTeam(c.Context(), id)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "team not found"})
+	}
+	_, _, role, _ := middleware.GetCurrentUser(c)
+	if role != model.RoleAdmin {
+		if len(team.Token) > 4 {
+			team.Token = team.Token[:4] + "****"
+		} else if team.Token != "" {
+			team.Token = "****"
+		}
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": team})
 }
@@ -574,7 +602,7 @@ func (h *teamHandler) Create(c fiber.Ctx) error {
 
 	team, err := h.svc.CreateTeam(c.Context(), sanitizedName)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	if req.Description != "" {
 		// XSS Protection: Sanitize description
@@ -601,7 +629,7 @@ func (h *teamHandler) Members(c fiber.Ctx) error {
 	}
 	members, err := h.svc.GetTeamMembers(c.Context(), id)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": members})
 }
@@ -644,7 +672,7 @@ func (h *flagHandler) Submit(c fiber.Ctx) error {
 
 	correct, points, err := h.svc.SubmitFlag(c.Context(), gameID, round, attackerTeamID, req.FlagValue)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
 	// Broadcast leaderboard update if flag was correct
@@ -669,7 +697,7 @@ func (h *flagHandler) History(c fiber.Ctx) error {
 	}
 	history, err := h.svc.GetFlagHistory(c.Context(), id, round)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": history})
 }
@@ -687,7 +715,7 @@ func (h *containerHandler) List(c fiber.Ctx) error {
 	}
 	containers, err := h.svc.GetContainers(c.Context(), id)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": containers})
 }
@@ -703,7 +731,7 @@ func (h *containerHandler) Restart(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 	}
 	if err := h.svc.RestartContainer(c.Context(), id, cid, operatorID); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok"})
 }
@@ -714,7 +742,7 @@ func (h *containerHandler) BulkRestart(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 	}
 	if err := h.svc.RestartAll(c.Context(), id); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok"})
 }
@@ -726,7 +754,7 @@ func (h *containerHandler) Stats(c fiber.Ctx) error {
 	}
 	stats, err := h.svc.GetStats(c.Context(), id)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": stats})
 }
@@ -744,7 +772,7 @@ func (h *rankingHandler) Get(c fiber.Ctx) error {
 	}
 	rankings, err := h.svc.GetRankings(c.Context(), id)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": rankings})
 }
@@ -757,7 +785,7 @@ func (h *rankingHandler) GetRound(c fiber.Ctx) error {
 	}
 	rankings, err := h.svc.GetRoundRankings(c.Context(), id, round)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": rankings})
 }
@@ -775,7 +803,7 @@ func (h *challengeHandler) List(c fiber.Ctx) error {
 	}
 	challenges, err := h.svc.ListChallenges(c.Context(), id)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": challenges})
 }
@@ -832,7 +860,7 @@ func (h *challengeHandler) Create(c fiber.Ctx) error {
 		MemLimit:     req.MemLimit,
 	})
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.Status(201).JSON(fiber.Map{"code": 0, "message": "ok", "data": ch})
 }
@@ -886,7 +914,7 @@ func (h *challengeHandler) Update(c fiber.Ctx) error {
 		MemLimit:     req.MemLimit,
 	})
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": ch})
 }
@@ -898,7 +926,7 @@ func (h *challengeHandler) Delete(c fiber.Ctx) error {
 	}
 
 	if err := h.svc.DeleteChallenge(c.Context(), challengeID); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok"})
 }
@@ -910,7 +938,7 @@ type userHandler struct {
 func (h *userHandler) List(c fiber.Ctx) error {
 	users, err := h.svc.ListUsers(c.Context())
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": users})
 }
@@ -945,7 +973,7 @@ func (h *userHandler) Create(c fiber.Ctx) error {
 	}
 
 	if err := h.svc.Register(c.Context(), sanitizedUsername, req.Password, sanitizedRole, req.TeamID); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.Status(201).JSON(fiber.Map{"code": 0, "message": "ok"})
 }
@@ -986,7 +1014,7 @@ func (h *userHandler) Update(c fiber.Ctx) error {
 	}
 
 	if err := h.svc.UpdateUser(c.Context(), id, req.Password, sanitizedEmail, sanitizedRole, req.TeamID); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok"})
 }
@@ -997,7 +1025,7 @@ func (h *userHandler) Delete(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 	}
 	if err := h.svc.DeleteUser(c.Context(), id); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok"})
 }
@@ -1029,7 +1057,7 @@ func (h *gameHandler) Resume(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 	}
 	if err := h.svc.ResumeGame(c.Context(), id); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "game resumed"})
 }
@@ -1050,7 +1078,7 @@ func (h *teamHandler) AddMember(c fiber.Ctx) error {
 	}
 
 	if err := h.svc.AddMember(c.Context(), teamID, req.UserID); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "member added successfully"})
 }
@@ -1066,7 +1094,7 @@ func (h *teamHandler) RemoveMember(c fiber.Ctx) error {
 	}
 
 	if err := h.svc.RemoveMember(c.Context(), teamID, userID); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "member removed successfully"})
 }

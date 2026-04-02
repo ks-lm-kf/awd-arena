@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"time"
 
@@ -11,6 +12,23 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 )
+
+func sanitizeFilePath(path string) string {
+	reg := regexp.MustCompile(`^[a-zA-Z0-9_/\-.]+$`)
+	if !reg.MatchString(path) {
+		return "/flag"
+	}
+	return path
+}
+
+func shellEscape(s string) string {
+	s = strings.ReplaceAll(s, "'", "'\\''")
+	s = strings.ReplaceAll(s, "`", "\\`")
+	s = strings.ReplaceAll(s, "$", "\\$")
+	s = strings.ReplaceAll(s, "\n", "")
+	s = strings.ReplaceAll(s, "\r", "")
+	return s
+}
 
 // FlagWriter writes flags to Docker containers.
 type FlagWriter struct {
@@ -42,16 +60,18 @@ func (fw *FlagWriter) WriteFlag(ctx context.Context, containerID, flag string, c
 	ctx, cancel := context.WithTimeout(ctx, fw.timeout)
 	defer cancel()
 
-	// Create exec instance
+	safePath := sanitizeFilePath(path)
+	safeFlag := shellEscape(flag)
+
 	execConfig := types.ExecConfig{
 		AttachStdout: true,
 		AttachStderr: true,
 		Cmd: []string{
 			"sh", "-c",
 			fmt.Sprintf("printf '%%s' '%s' > '%s' && chmod 600 '%s'",
-				strings.ReplaceAll(flag, "'", "'\\''"),
-				strings.ReplaceAll(path, "'", "'\\''"),
-				strings.ReplaceAll(path, "'", "'\\''")),
+				safeFlag,
+				strings.ReplaceAll(safePath, "'", "'\\''"),
+				strings.ReplaceAll(safePath, "'", "'\\''")),
 		},
 		User: "root",
 	}

@@ -2,9 +2,9 @@ package service
 
 import (
 	"context"
-	"time"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/awd-platform/awd-arena/internal/database"
 	"github.com/awd-platform/awd-arena/internal/middleware"
@@ -70,7 +70,7 @@ func (s *AuthService) Register(ctx context.Context, username, password, role str
 	user := model.User{
 		Username: username,
 		Password: hashed,
-		Role:     role,
+		Role:     "player",
 		TeamID:   teamID,
 	}
 	return db.Create(&user).Error
@@ -341,8 +341,8 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID int64, oldPassw
 	// Update password and clear must_change_password flag
 	now := time.Now()
 	updates := map[string]interface{}{
-		"password":            hashed,
-		"password_changed_at": &now,
+		"password":             hashed,
+		"password_changed_at":  &now,
 		"must_change_password": false,
 	}
 
@@ -383,5 +383,3 @@ func validatePasswordStrength(password, username string) error {
 
 	return nil
 }
-
-

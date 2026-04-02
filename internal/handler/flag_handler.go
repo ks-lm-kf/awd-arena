@@ -32,9 +32,9 @@ func NewFlagRefreshHandler(dockerClient *client.Client) *FlagRefreshHandler {
 
 // RefreshFlagsRequest represents the request body for refreshing flags.
 type RefreshFlagsRequest struct {
-	Round          int               `json:"round" validate:"required,min=1"`
-	CustomPath     string            `json:"custom_path,omitempty"`
-	TeamContainers map[int64]string  `json:"team_containers" validate:"required"` // teamID -> containerID
+	Round          int              `json:"round" validate:"required,min=1"`
+	CustomPath     string           `json:"custom_path,omitempty"`
+	TeamContainers map[int64]string `json:"team_containers" validate:"required"` // teamID -> containerID
 }
 
 // FlagResponse represents a flag in the response.
@@ -96,11 +96,10 @@ func (fh *FlagRefreshHandler) RefreshFlags(c fiber.Ctx) error {
 	for teamID, flag := range flags {
 		flagHash := crypto.SHA256Hex(flag)
 		record := &model.FlagRecord{
-			GameID:    gameID,
-			Round:     req.Round,
-			TeamID:    teamID,
-			FlagHash:  flagHash,
-			FlagValue: flag, // Store temporarily for current round
+			GameID:   gameID,
+			Round:    req.Round,
+			TeamID:   teamID,
+			FlagHash: flagHash,
 		}
 		if err := tx.Create(record).Error; err != nil {
 			tx.Rollback()
@@ -171,4 +170,3 @@ func (fh *FlagRefreshHandler) GetFlags(c fiber.Ctx) error {
 		"flags":   response,
 	})
 }
-

@@ -13,9 +13,9 @@ import (
 
 // FlagManager manages flag generation and validation.
 type FlagManager struct {
-	game     *model.Game
-	flagSvc  *service.FlagService
-	flags    map[string]*model.FlagRecord // key: "round:teamID:service"
+	game    *model.Game
+	flagSvc *service.FlagService
+	flags   map[string]*model.FlagRecord // key: "round:teamID:service"
 }
 
 func NewFlagManager(game *model.Game) *FlagManager {
@@ -28,7 +28,8 @@ func NewFlagManager(game *model.Game) *FlagManager {
 
 func (fm *FlagManager) GenerateRoundFlags(ctx context.Context, round int) error {
 	logger.Info("generating round flags", "round", round)
-	return fm.flagSvc.GenerateFlags(ctx, fm.game.ID, round)
+	_, err := fm.flagSvc.GenerateFlags(ctx, fm.game.ID, round)
+	return err
 }
 
 func (fm *FlagManager) GenerateFlag(teamID int64, service string, round int) string {
@@ -42,15 +43,14 @@ func (fm *FlagManager) GenerateFlag(teamID int64, service string, round int) str
 func (fm *FlagManager) ValidateFlag(flag string) (*model.FlagRecord, bool) {
 	flagHash := crypto.SHA256Hex(flag)
 	for _, record := range fm.flags {
-		if record.FlagHash == flagHash && record.FlagValue == flag {
+		if record.FlagHash == flagHash {
 			return record, true
 		}
 	}
-	// Check database as fallback
 	db := database.GetDB()
 	if db != nil {
 		var record model.FlagRecord
-		if err := db.Where("flag_hash = ? AND flag_value = ?", flagHash, flag).First(&record).Error; err == nil {
+		if err := db.Where("flag_hash = ?", flagHash).First(&record).Error; err == nil {
 			return &record, true
 		}
 	}

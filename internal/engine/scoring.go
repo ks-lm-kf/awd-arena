@@ -61,6 +61,9 @@ func (sc *ScoreCalculator) CalculateRoundScores(ctx context.Context, round int) 
 		attack := attackScores[team.ID] * attackWeight
 		defense := defenseLosses[team.ID] * defenseWeight
 		total := attack - defense
+		if total < 0 {
+			total = 0
+		}
 
 		roundScore := model.RoundScore{
 			GameID:       sc.game.ID,
@@ -110,8 +113,8 @@ func (sc *ScoreCalculator) UpdateCumulativeTeamScores(ctx context.Context) error
 
 	// Add score adjustments
 	type AdjTotal struct {
-		TeamID     int64
-		AdjTotal   int
+		TeamID   int64
+		AdjTotal int
 	}
 	var adjTotals []AdjTotal
 	db.Model(&model.ScoreAdjustment{}).
@@ -179,9 +182,8 @@ func (sc *ScoreCalculator) UpdateRankings(ctx context.Context, round int) error 
 	// Update each team's rank based on cumulative score
 	for i, t := range totals {
 		rank := i + 1
-		// Update the latest round score's rank
 		var latestScore model.RoundScore
-		if err := db.Where("game_id = ? AND team_id = ? AND round = ?", sc.game.ID, t.TeamID, sc.game.CurrentRound).First(&latestScore).Error; err == nil {
+		if err := db.Where("game_id = ? AND team_id = ?", sc.game.ID, t.TeamID).Order("round desc").First(&latestScore).Error; err == nil {
 			db.Model(&latestScore).Update("rank", rank)
 		}
 	}

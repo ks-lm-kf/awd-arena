@@ -20,6 +20,7 @@ type ContainerManager struct {
 	client DockerClient
 	store  ContainerStore
 	mu     sync.Mutex
+	sem    chan struct{} // concurrency limiter for Docker operations
 }
 
 // DockerClient abstracts Docker SDK operations.
@@ -82,16 +83,22 @@ type ContainerStats struct {
 
 // NewContainerManager creates a new manager.
 func NewContainerManager(client DockerClient, store ContainerStore) *ContainerManager {
+	const maxConcurrent = 5
+	sem := make(chan struct{}, maxConcurrent)
+	for i := 0; i < maxConcurrent; i++ {
+		sem <- struct{}{}
+	}
 	return &ContainerManager{
 		client: client,
 		store:  store,
+		sem:    sem,
 	}
 }
 
 // CreateChallengeContainer creates a container for a team's challenge.
 func (m *ContainerManager) CreateChallengeContainer(ctx context.Context, teamID int64, teamName string, challenge *model.Challenge, gameID int64, networkID string, ipAddress string, hostPortBase int) (*model.TeamContainer, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	<-m.sem
+	defer func() { m.sem <- struct{}{} }()
 
 	imageRef := challenge.ImageName
 	if challenge.ImageTag != "" && challenge.ImageTag != "latest" {
@@ -201,7 +208,7 @@ func (m *ContainerManager) CreateChallengeContainer(ctx context.Context, teamID 
 	// === 创建SSH用户 ===
 	sshCreateCmd := []string{
 		"sh", "-c",
-		fmt.Sprintf("useradd -m -s /bin/bash awd && echo 'awd:%s' | chpasswd && usermod -aG sudo awd", sshPassword),
+		fmt.Sprintf("useradd -m -s /bin/bash awd && echo 'awd:%s' | chpasswd", sshPassword),
 	}
 
 	execID, sshErr := m.client.ExecCreate(ctx, containerID, sshCreateCmd)
@@ -212,7 +219,7 @@ func (m *ContainerManager) CreateChallengeContainer(ctx context.Context, teamID 
 		if sshErr != nil {
 			logger.Error("failed to execute SSH user creation", "container", containerID, "error", sshErr)
 		} else {
-			logger.Info("SSH user created successfully", "container", containerID, "user", "awd", "password", sshPassword)
+			logger.Debug("SSH user created successfully", "container", containerID, "user", "awd")
 		}
 	}
 	// === SSH用户创建结束 ===

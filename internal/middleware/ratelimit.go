@@ -85,14 +85,30 @@ func RateLimit(limit int, window time.Duration) fiber.Handler {
 	}
 }
 
-// LoginRateLimit limits login attempts per IP (prevent brute force).
-// Stricter: 10 attempts per minute per IP.
+// LoginRateLimit limits login attempts per IP and per account (prevent brute force).
+// Stricter: 10 attempts per minute per IP and per username.
 func LoginRateLimit() fiber.Handler {
-	limiter := NewMultiKeyRateLimiter(10, 1*time.Minute)
+	ipLimiter := NewMultiKeyRateLimiter(10, 1*time.Minute)
+	accountLimiter := NewMultiKeyRateLimiter(10, 1*time.Minute)
 	return func(c fiber.Ctx) error {
-		key := "login:" + c.IP()
-		if !limiter.Allow(key) {
+		ipKey := "login:" + c.IP()
+		if !ipLimiter.Allow(ipKey) {
 			return c.Status(429).JSON(fiber.Map{"code": 429, "message": "too many login attempts, try again later"})
+		}
+		username := c.FormValue("username")
+		if username == "" {
+			// Try JSON body
+			var body struct {
+				Username string `json:"username"`
+			}
+			_ = c.Bind().Body(&body)
+			username = body.Username
+		}
+		if username != "" {
+			accountKey := fmt.Sprintf("login:account:%s", username)
+			if !accountLimiter.Allow(accountKey) {
+				return c.Status(429).JSON(fiber.Map{"code": 429, "message": "too many login attempts for this account, try again later"})
+			}
 		}
 		return c.Next()
 	}

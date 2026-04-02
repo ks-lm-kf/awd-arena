@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"html"
 	"strconv"
 	"time"
@@ -86,7 +87,7 @@ func (h *adminHandler) GetAdminLogs(c fiber.Ctx) error {
 
 	offset := (page - 1) * pageSize
 	if err := query.Order("created_at DESC").Limit(pageSize).Offset(offset).Find(&logs).Error; err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
 	return c.JSON(fiber.Map{
@@ -150,7 +151,7 @@ func (h *adminHandler) CreateGame(c fiber.Ctx) error {
 	}
 
 	if err := h.gameSvc.CreateGame(c.Context(), game); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
 	// Log the action
@@ -204,7 +205,7 @@ func (h *adminHandler) UpdateGame(c fiber.Ctx) error {
 	}
 
 	if err := h.gameSvc.UpdateGame(c.Context(), game); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
 	// Log the action
@@ -225,7 +226,7 @@ func (h *adminHandler) DeleteGame(c fiber.Ctx) error {
 
 	db := database.GetDB()
 	if err := db.Delete(&model.Game{}, id).Error; err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
 	// Log the action
@@ -245,7 +246,7 @@ func (h *adminHandler) StartGame(c fiber.Ctx) error {
 	}
 
 	if err := h.gameSvc.StartGame(c.Context(), id); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
 	// Log the action
@@ -265,7 +266,7 @@ func (h *adminHandler) PauseGame(c fiber.Ctx) error {
 	}
 
 	if err := h.gameSvc.PauseGame(c.Context(), id); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
 	// Log the action
@@ -285,7 +286,7 @@ func (h *adminHandler) ResumeGame(c fiber.Ctx) error {
 	}
 
 	if err := h.gameSvc.ResumeGame(c.Context(), id); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
 	// Log the action
@@ -305,7 +306,7 @@ func (h *adminHandler) StopGame(c fiber.Ctx) error {
 	}
 
 	if err := h.gameSvc.StopGame(c.Context(), id); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
 	// Log the action
@@ -325,7 +326,7 @@ func (h *adminHandler) ResetGame(c fiber.Ctx) error {
 	}
 
 	if err := h.gameSvc.ResetGame(c.Context(), id); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
 	// Log the action
@@ -354,7 +355,7 @@ func (h *adminHandler) CreateTeam(c fiber.Ctx) error {
 
 	team, err := h.teamSvc.CreateTeam(c.Context(), req.Name)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
 	if req.Description != "" {
@@ -404,7 +405,7 @@ func (h *adminHandler) UpdateTeam(c fiber.Ctx) error {
 
 	db := database.GetDB()
 	if err := db.Save(team).Error; err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
 	// Log the action
@@ -423,9 +424,19 @@ func (h *adminHandler) DeleteTeam(c fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "team not found"})
 	}
 
+	teamID := id
 	db := database.GetDB()
+	// Remove from game associations
+	db.Where("team_id = ?", teamID).Delete(&model.GameTeam{})
+	// Nullify user references
+	db.Model(&model.User{}).Where("team_id = ?", teamID).Update("team_id", nil)
+	// Remove flag records
+	db.Where("team_id = ?", teamID).Delete(&model.FlagRecord{})
+	// Remove flag submissions
+	db.Where("attacker_team = ? OR target_team = ?", teamID, teamID).Delete(&model.FlagSubmission{})
+	// Then delete the team
 	if err := db.Delete(&model.Team{}, id).Error; err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
 	// Log the action
@@ -475,6 +486,12 @@ func (h *adminHandler) BatchImportTeams(c fiber.Ctx) error {
 			team.Token = teamReq.Token
 		}
 
+		db := database.GetDB()
+		if err := db.Save(team).Error; err != nil {
+			errors = append(errors, fmt.Sprintf("failed to update team %s: %v", team.Name, err))
+			continue
+		}
+
 		imported = append(imported, *team)
 	}
 
@@ -511,7 +528,7 @@ func (h *adminHandler) ResetTeam(c fiber.Ctx) error {
 	team.Score = 0
 	db := database.GetDB()
 	if err := db.Save(team).Error; err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
 	// Log the action
@@ -555,10 +572,6 @@ func (h *adminHandler) AdjustScore(c fiber.Ctx) error {
 	}
 
 	oldScore := team.Score
-	team.Score += req.Amount
-	if err := db.Save(&team).Error; err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
-	}
 
 	adjustment := model.ScoreAdjustment{
 		GameID:      req.GameID,
@@ -586,7 +599,7 @@ func (h *adminHandler) AdjustScore(c fiber.Ctx) error {
 			"team_name":  team.Name,
 			"old_score":  oldScore,
 			"adjustment": req.Amount,
-			"new_score":  team.Score,
+			"new_score":  oldScore + req.Amount,
 		},
 	})
 }
@@ -629,7 +642,7 @@ func (h *adminHandler) AddTeamToGame(c fiber.Ctx) error {
 		TeamID: req.TeamID,
 	}
 	if err := db.Create(gameTeam).Error; err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
 	// Log the action
@@ -664,7 +677,7 @@ func (h *adminHandler) RemoveTeamFromGame(c fiber.Ctx) error {
 
 	// Remove team from game
 	if err := db.Where("game_id = ? AND team_id = ?", gameID, teamID).Delete(&model.GameTeam{}).Error; err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
 	// Log the action
@@ -691,7 +704,7 @@ func (h *adminHandler) GetGameTeams(c fiber.Ctx) error {
 	// Get teams for the game
 	var gameTeams []model.GameTeam
 	if err := db.Where("game_id = ?", gameID).Preload("Team").Find(&gameTeams).Error; err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
 	// Transform to response format with member count

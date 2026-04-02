@@ -46,13 +46,13 @@ type StateTransitionCallback func(ctx context.Context, gameID int64, fromState, 
 
 // GameStateMachine manages game state transitions
 type GameStateMachine struct {
-	mu         sync.RWMutex
-	gameID     int64
-	game       *model.Game
-	state      GameState
-	callbacks  []StateTransitionCallback
-	eventBus   *eventbus.Bus
-	persistDB  bool
+	mu        sync.RWMutex
+	gameID    int64
+	game      *model.Game
+	state     GameState
+	callbacks []StateTransitionCallback
+	eventBus  *eventbus.Bus
+	persistDB bool
 }
 
 // Valid state transitions
@@ -73,10 +73,10 @@ var validTransitions = map[GameState]map[GameEvent]GameState{
 
 // State transition errors
 var (
-	ErrInvalidTransition    = errors.New("invalid state transition")
-	ErrGameNotFound         = errors.New("game not found")
-	ErrInvalidCurrentState  = errors.New("invalid current state")
-	ErrTransitionCallback   = errors.New("transition callback failed")
+	ErrInvalidTransition   = errors.New("invalid state transition")
+	ErrGameNotFound        = errors.New("game not found")
+	ErrInvalidCurrentState = errors.New("invalid current state")
+	ErrTransitionCallback  = errors.New("transition callback failed")
 )
 
 // NewGameStateMachine creates a new game state machine
@@ -190,10 +190,10 @@ func (gsm *GameStateMachine) Transition(ctx context.Context, event GameEvent) er
 	// Publish event to event bus
 	if gsm.eventBus != nil {
 		eventData := map[string]interface{}{
-			"game_id":     gsm.gameID,
-			"from_state":  fromState,
-			"to_state":    newState,
-			"event":       event,
+			"game_id":    gsm.gameID,
+			"from_state": fromState,
+			"to_state":   newState,
+			"event":      event,
 		}
 		eventType := fmt.Sprintf("game_state_%s", newState)
 		if err := gsm.eventBus.Publish(ctx, eventType, eventData); err != nil {
@@ -248,10 +248,10 @@ func (gsm *GameStateMachine) updateModelState() {
 		gsm.game.Status = "draft"
 		gsm.game.CurrentPhase = "preparation"
 	case StateRunning:
-		gsm.game.Status = "active"
+		gsm.game.Status = "running"
 		gsm.game.CurrentPhase = "running"
 	case StatePaused:
-		gsm.game.Status = "active"
+		gsm.game.Status = "paused"
 		gsm.game.CurrentPhase = "break"
 	case StateFinished:
 		gsm.game.Status = "finished"
@@ -294,15 +294,10 @@ func mapModelToGameState(status, currentPhase string) GameState {
 	switch status {
 	case "finished":
 		return StateFinished
-	case "active":
-		switch currentPhase {
-		case "running":
-			return StateRunning
-		case "break":
-			return StatePaused
-		default:
-			return StateRunning
-		}
+	case "running":
+		return StateRunning
+	case "paused":
+		return StatePaused
 	case "draft":
 		return StatePreparing
 	default:

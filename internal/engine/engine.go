@@ -201,15 +201,13 @@ func (e *CompetitionEngine) onRoundStart(ctx context.Context, round int) error {
 		})
 	}
 
-	// Generate flags
-	err := e.flagSvc.GenerateFlags(ctx, e.game.ID, round)
+	flagValues, err := e.flagSvc.GenerateFlags(ctx, e.game.ID, round)
 	if err != nil {
 		logger.Error("failed to generate flags", "round", round, "error", err)
 		return err
 	}
 
-	// Write flags to containers
-	if err := e.writeFlagsToContainers(ctx, round); err != nil {
+	if err := e.writeFlagsToContainers(ctx, round, flagValues); err != nil {
 		logger.Error("failed to write flags to containers", "round", round, "error", err)
 		// Don't return error here, flags were generated successfully
 	}
@@ -227,7 +225,7 @@ func (e *CompetitionEngine) onRoundStart(ctx context.Context, round int) error {
 }
 
 // writeFlagsToContainers writes the generated flags to each team's container.
-func (e *CompetitionEngine) writeFlagsToContainers(ctx context.Context, round int) error {
+func (e *CompetitionEngine) writeFlagsToContainers(ctx context.Context, round int, flagValues map[int64]map[int64]string) error {
 	if e.flagWriter == nil || e.dockerClient == nil {
 		logger.Warn("flag writer or docker client not initialized, skipping flag write")
 		return nil
@@ -238,7 +236,6 @@ func (e *CompetitionEngine) writeFlagsToContainers(ctx context.Context, round in
 		return nil
 	}
 
-	// Get all team containers for this game
 	var containers []model.TeamContainer
 	if err := db.Where("game_id = ?", e.game.ID).Find(&containers).Error; err != nil {
 		logger.Error("failed to get team containers", "error", err)
@@ -250,25 +247,16 @@ func (e *CompetitionEngine) writeFlagsToContainers(ctx context.Context, round in
 		return nil
 	}
 
-	// Get flag records for this round
-	var flagRecords []model.FlagRecord
-	if err := db.Where("game_id = ? AND round = ?", e.game.ID, round).Find(&flagRecords).Error; err != nil {
-		logger.Error("failed to get flag records", "error", err)
-		return err
-	}
-
-	// Build map of teamID -> flag value
-	flagMap := make(map[int64]string)
-	for _, record := range flagRecords {
-		flagMap[record.TeamID] = record.FlagValue
-	}
-
-	// Write flags to containers
 	successCount := 0
 	for _, container := range containers {
-		flagValue, ok := flagMap[container.TeamID]
+		challengeFlags, ok := flagValues[container.TeamID]
 		if !ok {
-			logger.Warn("no flag found for team", "team_id", container.TeamID, "container_id", container.ContainerID)
+			logger.Warn("no flags found for team", "team_id", container.TeamID, "container_id", container.ContainerID)
+			continue
+		}
+		flagValue, ok := challengeFlags[container.ChallengeID]
+		if !ok {
+			logger.Warn("no flag found for team challenge", "team_id", container.TeamID, "challenge_id", container.ChallengeID, "container_id", container.ContainerID)
 			continue
 		}
 
@@ -296,7 +284,6 @@ func (e *CompetitionEngine) writeFlagsToContainers(ctx context.Context, round in
 func (e *CompetitionEngine) onRoundEnd(ctx context.Context, round int) error {
 	e.currentPhase = "scoring"
 
-	// Publish round:end event
 	bus := eventbus.GetBus()
 	_ = bus.Publish(ctx, "round:end", map[string]interface{}{
 		"game_id": e.game.ID,
@@ -305,6 +292,35 @@ func (e *CompetitionEngine) onRoundEnd(ctx context.Context, round int) error {
 	})
 
 	return e.scorer.CalculateRoundScores(ctx, round)
+}
+
+func (e *CompetitionEngine) finishGame(ctx context.Context) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.running = false
+	e.currentPhase = "finished"
+
+	if e.healthChecker != nil {
+		e.healthChecker.Stop()
+	}
+
+	db := database.GetDB()
+	if db != nil {
+		now := time.Now()
+		db.Model(&model.Game{}).Where("id = ?", e.game.ID).Updates(map[string]interface{}{
+			"status":        "finished",
+			"current_phase": "finished",
+			"end_time":      now,
+		})
+	}
+
+	bus := eventbus.GetBus()
+	_ = bus.Publish(ctx, "game:finished", map[string]interface{}{
+		"game_id": e.game.ID,
+		"round":   e.currentRound,
+	})
+
+	logger.Info("game finished and cleaned up", "game_id", e.game.ID, "total_rounds", e.totalRounds)
 }
 
 // SetCancelFunc sets the cancel function for the engine.

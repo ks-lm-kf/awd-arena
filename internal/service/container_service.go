@@ -8,9 +8,11 @@ import (
 
 	"github.com/awd-platform/awd-arena/internal/container"
 	"github.com/awd-platform/awd-arena/internal/database"
+	"github.com/awd-platform/awd-arena/internal/eventbus"
 	"github.com/awd-platform/awd-arena/internal/model"
 	"github.com/awd-platform/awd-arena/internal/network"
 	"github.com/awd-platform/awd-arena/pkg/logger"
+	"gorm.io/gorm"
 )
 
 var (
@@ -139,6 +141,8 @@ func (s *ContainerService) ProvisionContainers(ctx context.Context, gameID int64
 	}
 
 	hostPortBase := 31000
+	totalContainers := len(teams) * len(challenges)
+	var failedCount int
 	for _, team := range teams {
 		netName, _ := netMgr.GetTeamNetwork(team.ID)
 		chalIdx := 0
@@ -148,7 +152,9 @@ func (s *ContainerService) ProvisionContainers(ctx context.Context, gameID int64
 
 			tc, err := mgr.CreateChallengeContainer(ctx, team.ID, team.Name, &chal, gameID, netName, ip, portBase)
 			if err != nil {
+				failedCount++
 				logger.Error("create container failed", "team", team.ID, "challenge", chal.ID, "error", err)
+				chalIdx++
 				continue
 			}
 			logger.Info("container provisioned", "team", team.ID, "challenge", chal.ID, "ip", tc.IPAddress)
@@ -161,6 +167,18 @@ func (s *ContainerService) ProvisionContainers(ctx context.Context, gameID int64
 		isoTeamIDs = append(isoTeamIDs, t.ID)
 	}
 	_ = netMgr.IsolateTeams(ctx, isoTeamIDs)
+
+	if failedCount > 0 {
+		_ = eventbus.GetBus().Publish(ctx, "container:creation_failed", map[string]interface{}{
+			"game_id": gameID,
+			"failed":  failedCount,
+			"total":   totalContainers,
+		})
+		if failedCount >= totalContainers {
+			return errors.New("all container creations failed")
+		}
+		logger.Warn("partial container creation failure", "failed", failedCount, "total", totalContainers)
+	}
 
 	logger.Info("provisioning complete", "teams", len(teams), "challenges", len(challenges))
 	return nil
@@ -265,6 +283,9 @@ func (s *ContainerService) RestartContainer(ctx context.Context, gameID, contain
 	if err := db.Create(&adjustment).Error; err != nil {
 		logger.Error("failed to create score adjustment for container restart", "error", err)
 	}
+
+	penalty := -50
+	db.Model(&model.Team{}).Where("id = ?", tc.TeamID).Update("score", gorm.Expr("score + ?", penalty))
 
 	return nil
 }

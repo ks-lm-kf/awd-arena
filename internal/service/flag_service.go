@@ -29,26 +29,25 @@ type FlagHistoryItem struct {
 	SubmittedAt  time.Time `json:"submitted_at"`
 }
 
-func (s *FlagService) GenerateFlags(ctx context.Context, gameID int64, round int) error {
+func (s *FlagService) GenerateFlags(ctx context.Context, gameID int64, round int) (map[int64]map[int64]string, error) {
 	db := database.GetDB()
 	if db == nil {
-		return errors.New("database not initialized")
+		return nil, errors.New("database not initialized")
 	}
 
 	var game model.Game
 	if err := db.First(&game, gameID).Error; err != nil {
-		return err
+		return nil, err
 	}
 
 	var challenges []model.Challenge
 	if err := db.Where("game_id = ?", gameID).Find(&challenges).Error; err != nil {
-		return err
+		return nil, err
 	}
 
-	// Get teams for this game via GameTeam table
 	var gameTeams []model.GameTeam
 	if err := db.Where("game_id = ?", gameID).Find(&gameTeams).Error; err != nil {
-		return err
+		return nil, err
 	}
 	var teamIDs []int64
 	for _, gt := range gameTeams {
@@ -57,29 +56,30 @@ func (s *FlagService) GenerateFlags(ctx context.Context, gameID int64, round int
 	var teams []model.Team
 	if len(teamIDs) > 0 {
 		if err := db.Where("id IN ?", teamIDs).Find(&teams).Error; err != nil {
-			return err
+			return nil, err
 		}
 	}
 
+	flagValues := make(map[int64]map[int64]string)
+
 	for _, team := range teams {
+		flagValues[team.ID] = make(map[int64]string)
 		for _, ch := range challenges {
-			// Use consistent format: flag{gameID_round_teamID_challengeID_random}
 			randomHex, _ := crypto.GenerateRandomHex(16)
 			flagValue := fmt.Sprintf("flag{%d_%d_%d_%d_%s}", gameID, round, team.ID, ch.ID, randomHex)
 			record := model.FlagRecord{
-				GameID:    gameID,
-				Round:     round,
-				TeamID:    team.ID,
-				FlagHash:  crypto.SHA256Hex(flagValue),
-				FlagValue: flagValue,
-				Service:   ch.Name,
-				CreatedAt: time.Now(),
+				GameID:   gameID,
+				Round:    round,
+				TeamID:   team.ID,
+				FlagHash: crypto.SHA256Hex(flagValue),
+				Service:  ch.Name,
 			}
 			db.Create(&record)
+			flagValues[team.ID][ch.ID] = flagValue
 			logger.Info("flag generated", "team", team.ID, "service", ch.Name, "round", round)
 		}
 	}
-	return nil
+	return flagValues, nil
 }
 
 func (s *FlagService) SubmitFlag(ctx context.Context, gameID, round, attackerTeam int64, flagValue string) (bool, float64, error) {
@@ -91,14 +91,15 @@ func (s *FlagService) SubmitFlag(ctx context.Context, gameID, round, attackerTea
 	flagHash := crypto.SHA256Hex(flagValue)
 
 	var flagRecord model.FlagRecord
-	err := db.Where("game_id = ? AND round = ? AND flag_hash = ? AND flag_value = ?",
-		gameID, round, flagHash, flagValue).First(&flagRecord).Error
+	err := db.Where("game_id = ? AND round = ? AND flag_hash = ?",
+		gameID, round, flagHash).First(&flagRecord).Error
 	if err != nil {
 		submission := model.FlagSubmission{
 			GameID:       gameID,
 			Round:        int(round),
 			AttackerTeam: attackerTeam,
 			TargetTeam:   0,
+			FlagHash:     flagHash,
 			FlagValue:    flagValue,
 			IsCorrect:    false,
 			PointsEarned: 0,
@@ -121,6 +122,7 @@ func (s *FlagService) SubmitFlag(ctx context.Context, gameID, round, attackerTea
 		Round:        int(round),
 		AttackerTeam: attackerTeam,
 		TargetTeam:   flagRecord.TeamID,
+		FlagHash:     flagHash,
 		FlagValue:    flagValue,
 		IsCorrect:    true,
 		PointsEarned: points,
@@ -130,8 +132,8 @@ func (s *FlagService) SubmitFlag(ctx context.Context, gameID, round, attackerTea
 	err = db.Transaction(func(tx *gorm.DB) error {
 		var existing int64
 		tx.Model(&model.FlagSubmission{}).Where(
-			"game_id = ? AND round = ? AND attacker_team = ? AND target_team = ? AND is_correct = ?",
-			gameID, round, attackerTeam, flagRecord.TeamID, true,
+			"game_id = ? AND round = ? AND attacker_team = ? AND flag_hash = ?",
+			gameID, round, attackerTeam, flagHash,
 		).Count(&existing)
 		if existing > 0 {
 			return errors.New("already submitted")
@@ -176,11 +178,15 @@ func (s *FlagService) GetFlagHistory(ctx context.Context, gameID int64, round in
 
 	items := make([]FlagHistoryItem, len(submissions))
 	for i, sub := range submissions {
+		maskedFlag := "***"
+		if len(sub.FlagValue) > 8 {
+			maskedFlag = sub.FlagValue[:8] + "..."
+		}
 		items[i] = FlagHistoryItem{
 			ID:           sub.ID,
 			AttackerTeam: sub.AttackerTeam,
 			TargetTeam:   sub.TargetTeam,
-			FlagValue:    sub.FlagValue,
+			FlagValue:    maskedFlag,
 			IsCorrect:    sub.IsCorrect,
 			PointsEarned: sub.PointsEarned,
 			Round:        sub.Round,

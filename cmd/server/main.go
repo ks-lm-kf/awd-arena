@@ -114,20 +114,21 @@ func seedAdmin() {
 	var count int64
 	db.Model(&model.User{}).Where("role = ?", "admin").Count(&count)
 	if count == 0 {
-		hashed, err := crypto.HashPassword("admin123")
+		hashed, err := crypto.HashPassword("Admin@2026")
 		if err != nil {
 			logger.Get().Error("failed to hash admin password", "error", err)
 			return
 		}
 		admin := model.User{
-			Username: "admin",
-			Password: hashed,
-			Role:     "admin",
+			Username:           "admin",
+			Password:           hashed,
+			Role:               "admin",
+			MustChangePassword: true,
 		}
 		if err := db.Create(&admin).Error; err != nil {
 			logger.Get().Error("failed to create admin", "error", err)
 			return
 		}
-		logger.Get().Info("Default admin account created: admin/admin123")
+		logger.Get().Info("Default admin account created (please change the default password)")
 	}
 }

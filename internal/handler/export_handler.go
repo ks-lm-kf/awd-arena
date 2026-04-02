@@ -1,12 +1,15 @@
 package handler
 
 import (
+	"bytes"
+	"encoding/csv"
 	"fmt"
 	"time"
 
 	"github.com/awd-platform/awd-arena/internal/database"
 	"github.com/awd-platform/awd-arena/internal/model"
 	"github.com/gofiber/fiber/v3"
+	"github.com/jung-kurt/gofpdf"
 )
 
 var ExportHandler = &exportHandler{}
@@ -34,17 +37,30 @@ func (h *exportHandler) ExportRankingCSV(c fiber.Ctx) error {
 		teamMap[t.ID] = t.Name
 	}
 
-	csv := "Rank,Team,TotalScore,AttackScore,DefenseScore,Round\n"
+	var buf bytes.Buffer
+	writer := csv.NewWriter(&buf)
+	writer.Write([]string{"Rank", "Team", "TotalScore", "AttackScore", "DefenseScore", "Round"})
 	for _, s := range roundScores {
-		csv += fmt.Sprintf("%d,%s,%.2f,%.2f,%.2f,%d\n", s.Rank, teamMap[s.TeamID], s.TotalScore, s.AttackScore, s.DefenseScore, s.Round)
+		writer.Write([]string{
+			fmt.Sprintf("%d", s.Rank),
+			teamMap[s.TeamID],
+			fmt.Sprintf("%.2f", s.TotalScore),
+			fmt.Sprintf("%.2f", s.AttackScore),
+			fmt.Sprintf("%.2f", s.DefenseScore),
+			fmt.Sprintf("%d", s.Round),
+		})
+	}
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
 
 	c.Set("Content-Type", "text/csv; charset=utf-8")
 	c.Set("Content-Disposition", "attachment; filename=ranking_"+time.Now().Format("20060102_150405")+".csv")
-	return c.SendString(csv)
+	return c.Send(buf.Bytes())
 }
 
-// ExportRankingPDF exports rankings as HTML report
+// ExportRankingPDF exports rankings as a real PDF document.
 // GET /api/v1/games/:id/export/ranking/pdf
 func (h *exportHandler) ExportRankingPDF(c fiber.Ctx) error {
 	gameID, _ := parseID(c.Params("id"))
@@ -65,22 +81,47 @@ func (h *exportHandler) ExportRankingPDF(c fiber.Ctx) error {
 		teamMap[t.ID] = t.Name
 	}
 
-	html := `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>AWD Arena Ranking</title>
-	<style>body{font-family:Arial,sans-serif;margin:20px}table{border-collapse:collapse;width:100%;margin-top:20px}
-	th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#4CAF50;color:white}
-	tr:nth-child(even){background:#f2f2f2}</style></head><body><h1>AWD Arena Ranking Report</h1>
-	<p>Generated: ` + time.Now().Format("2006-01-02 15:04:05") + `</p>
-	<table><tr><th>Rank</th><th>Team</th><th>Total</th><th>Attack</th><th>Defense</th></tr>`
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.AddPage()
+	pdf.SetFont("Arial", "B", 16)
+	pdf.Cell(0, 10, "AWD Arena Ranking Report")
+	pdf.Ln(14)
+	pdf.SetFont("Arial", "", 10)
+	pdf.Cell(0, 6, "Generated: "+time.Now().Format("2006-01-02 15:04:05"))
+	pdf.Ln(10)
 
-	for _, s := range roundScores {
-		html += fmt.Sprintf("<tr><td>%d</td><td>%s</td><td>%.2f</td><td>%.2f</td><td>%.2f</td></tr>",
-			s.Rank, teamMap[s.TeamID], s.TotalScore, s.AttackScore, s.DefenseScore)
+	pdf.SetFont("Arial", "B", 10)
+	colWidths := []float64{15, 50, 30, 30, 30, 30}
+	headers := []string{"Rank", "Team", "Total", "Attack", "Defense", "Round"}
+	for i, h := range headers {
+		pdf.CellFormat(colWidths[i], 8, h, "1", 0, "C", false, 0, "")
 	}
-	html += "</table></body></html>"
+	pdf.Ln(-1)
 
-	c.Set("Content-Type", "text/html; charset=utf-8")
-	c.Set("Content-Disposition", "attachment; filename=ranking_"+time.Now().Format("20060102_150405")+".html")
-	return c.SendString(html)
+	pdf.SetFont("Arial", "", 10)
+	for _, s := range roundScores {
+		cells := []string{
+			fmt.Sprintf("%d", s.Rank),
+			teamMap[s.TeamID],
+			fmt.Sprintf("%.2f", s.TotalScore),
+			fmt.Sprintf("%.2f", s.AttackScore),
+			fmt.Sprintf("%.2f", s.DefenseScore),
+			fmt.Sprintf("%d", s.Round),
+		}
+		for i, cell := range cells {
+			pdf.CellFormat(colWidths[i], 7, cell, "1", 0, "C", false, 0, "")
+		}
+		pdf.Ln(-1)
+	}
+
+	var buf bytes.Buffer
+	if err := pdf.Output(&buf); err != nil {
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "pdf generation failed"})
+	}
+
+	c.Set("Content-Type", "application/pdf")
+	c.Set("Content-Disposition", "attachment; filename=ranking_"+time.Now().Format("20060102_150405")+".pdf")
+	return c.Send(buf.Bytes())
 }
 
 // ExportAttackLog exports attack logs as CSV
@@ -95,19 +136,31 @@ func (h *exportHandler) ExportAttackLog(c fiber.Ctx) error {
 	var submissions []model.FlagSubmission
 	db.Where("game_id = ?", gameID).Order("submitted_at desc").Limit(1000).Find(&submissions)
 
-	csv := "Time,AttackerTeam,TargetTeam,Correct,Points,Round\n"
+	var buf bytes.Buffer
+	writer := csv.NewWriter(&buf)
+	writer.Write([]string{"Time", "AttackerTeam", "TargetTeam", "Correct", "Points", "Round"})
 	for _, s := range submissions {
 		correct := "no"
 		if s.IsCorrect {
 			correct = "yes"
 		}
-		csv += fmt.Sprintf("%s,%d,%d,%s,%.2f,%d\n",
-			s.SubmittedAt.Format("2006-01-02 15:04:05"), s.AttackerTeam, s.TargetTeam, correct, s.PointsEarned, s.Round)
+		writer.Write([]string{
+			s.SubmittedAt.Format("2006-01-02 15:04:05"),
+			fmt.Sprintf("%d", s.AttackerTeam),
+			fmt.Sprintf("%d", s.TargetTeam),
+			correct,
+			fmt.Sprintf("%.2f", s.PointsEarned),
+			fmt.Sprintf("%d", s.Round),
+		})
+	}
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
 	}
 
 	c.Set("Content-Type", "text/csv; charset=utf-8")
 	c.Set("Content-Disposition", "attachment; filename=attacks_"+time.Now().Format("20060102_150405")+".csv")
-	return c.SendString(csv)
+	return c.Send(buf.Bytes())
 }
 
 // ExportAll returns all export links

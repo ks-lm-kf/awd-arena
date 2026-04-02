@@ -2,13 +2,27 @@ package middleware
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/awd-platform/awd-arena/internal/config"
-	"github.com/gofiber/fiber/v3"
 	"github.com/awd-platform/awd-arena/pkg/logger"
+	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
 )
+
+// tokenBlacklist stores revoked tokens with their expiry time.
+var tokenBlacklist sync.Map
+
+// BlacklistToken adds a token to the revocation list.
+func BlacklistToken(token string) {
+	tokenBlacklist.Store(token, time.Now().Add(24*time.Hour))
+}
+
+func isTokenBlacklisted(token string) bool {
+	_, ok := tokenBlacklist.Load(token)
+	return ok
+}
 
 // Claims represents JWT claims.
 type Claims struct {
@@ -45,6 +59,10 @@ func JWTAuth() fiber.Handler {
 		tokenString := authHeader
 		if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
 			tokenString = authHeader[7:]
+		}
+
+		if isTokenBlacklisted(tokenString) {
+			return c.Status(401).JSON(fiber.Map{"code": 401, "message": "token has been revoked"})
 		}
 
 		secret := getJWTSecret()
@@ -102,7 +120,7 @@ func GetJWTSecret() string {
 // ValidateToken parses and validates a JWT token from the request.
 func ValidateToken(c fiber.Ctx, secret string) (int64, error) {
 	logger.Info("[JWTAuth DEBUG]", "path", c.Path(), "method", c.Method())
-		authHeader := c.Get("Authorization")
+	authHeader := c.Get("Authorization")
 	if authHeader == "" {
 		return 0, fmt.Errorf("missing authorization header")
 	}

@@ -27,27 +27,33 @@ type wsConn struct {
 
 // WSHub manages WebSocket connections and game subscriptions.
 type WSHub struct {
-	mu      sync.RWMutex
-	clients map[*wsConn]struct{}
-	gameSub map[string]map[*wsConn]struct{}
+	mu       sync.RWMutex
+	clients  map[*wsConn]struct{}
+	gameSub  map[string]map[*wsConn]struct{}
+	userSubs map[string][]string // userID -> list of gameIDs they were subscribed to
+	userConn map[string]*wsConn  // userID -> current active connection
 }
 
 // Hub is the global WebSocket hub instance.
 var Hub = &WSHub{
-	clients: make(map[*wsConn]struct{}),
-	gameSub: make(map[string]map[*wsConn]struct{}),
+	clients:  make(map[*wsConn]struct{}),
+	gameSub:  make(map[string]map[*wsConn]struct{}),
+	userSubs: make(map[string][]string),
+	userConn: make(map[string]*wsConn),
 }
 
-func (h *WSHub) Register(wc *wsConn) {
+func (h *WSHub) Register(wc *wsConn, userID string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.clients[wc] = struct{}{}
+	h.userConn[userID] = wc
 }
 
-func (h *WSHub) Unregister(wc *wsConn) {
+func (h *WSHub) Unregister(wc *wsConn, userID string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	delete(h.clients, wc)
+	delete(h.userConn, userID)
 	for gameID := range h.gameSub {
 		delete(h.gameSub[gameID], wc)
 	}
@@ -60,6 +66,28 @@ func (h *WSHub) Subscribe(gameID string, wc *wsConn) {
 		h.gameSub[gameID] = make(map[*wsConn]struct{})
 	}
 	h.gameSub[gameID][wc] = struct{}{}
+}
+
+func (h *WSHub) TrackUserSub(userID string, gameID string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, gid := range h.userSubs[userID] {
+		if gid == gameID {
+			return
+		}
+	}
+	h.userSubs[userID] = append(h.userSubs[userID], gameID)
+}
+
+func (h *WSHub) RestoreSubs(userID string, wc *wsConn) {
+	h.mu.Lock()
+	gameIDs := make([]string, len(h.userSubs[userID]))
+	copy(gameIDs, h.userSubs[userID])
+	h.mu.Unlock()
+
+	for _, gid := range gameIDs {
+		h.Subscribe(gid, wc)
+	}
 }
 
 func (h *WSHub) BroadcastToGame(gameID string, message []byte) {
@@ -130,6 +158,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid token", http.StatusUnauthorized)
 		return
 	}
+	userID := fmt.Sprintf("%d", claims.UserID)
 	logger.Info("ws connection authenticated", "user", claims.Username)
 
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -139,8 +168,9 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	wc := &wsConn{conn: conn}
 	defer conn.Close()
-	Hub.Register(wc)
-	defer Hub.Unregister(wc)
+	Hub.Register(wc, userID)
+	defer Hub.Unregister(wc, userID)
+	Hub.RestoreSubs(userID, wc)
 
 	for {
 		_, msg, err := conn.ReadMessage()
@@ -156,6 +186,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			if ch, ok := wsMsg.Data.(map[string]interface{}); ok {
 				if channel, ok := ch["channel"].(string); ok {
 					Hub.Subscribe(channel, wc)
+					Hub.TrackUserSub(userID, channel)
 				}
 			}
 		case "unsubscribe":

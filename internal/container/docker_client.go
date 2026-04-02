@@ -62,12 +62,15 @@ func (d *DockerClientImpl) CreateContainer(ctx context.Context, opts CreateOptio
 			MemorySwap: opts.Resources.MemoryMB * 1024 * 1024,
 			PidsLimit:  int64Ptr(int64(opts.Resources.PidsLimit)),
 		},
+		StorageOpt: map[string]string{
+			"size": diskQuota,
+		},
 		NetworkMode:   container.NetworkMode(opts.NetworkID),
 		AutoRemove:    opts.AutoRemove,
-		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
+		RestartPolicy: container.RestartPolicy{Name: "no"},
 		SecurityOpt:   []string{"no-new-privileges:true"},
 		CapDrop:       []string{"ALL"},
-		CapAdd:        []string{"NET_BIND_SERVICE", "CHOWN", "SETUID", "SETGID", "DAC_OVERRIDE"},
+		CapAdd:        []string{"CAP_NET_BIND_SERVICE"},
 	}
 
 	networkingConfig := &network.NetworkingConfig{}

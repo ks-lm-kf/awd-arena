@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -18,11 +19,11 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Host       string `yaml:"host"`
-	Port       int    `yaml:"port"`
-	TLSPort    int    `yaml:"tls_port"`
-	JWTSecret  string `yaml:"jwt_secret"`
-	StaticDir  string `yaml:"static_dir"`
+	Host      string `yaml:"host"`
+	Port      int    `yaml:"port"`
+	TLSPort   int    `yaml:"tls_port"`
+	JWTSecret string `yaml:"jwt_secret"`
+	StaticDir string `yaml:"static_dir"`
 }
 
 type DatabaseConfig struct {
@@ -68,6 +69,11 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 	setDefaults()
+
+	if C.Server.JWTSecret == "" || len(C.Server.JWTSecret) < 32 {
+		return nil, fmt.Errorf("JWT secret must be at least 32 characters long")
+	}
+
 	return &C, nil
 }
 
@@ -85,7 +91,7 @@ func setDefaults() {
 		C.Server.StaticDir = "web/dist"
 	}
 	if C.Security.JWTExpireHours == 0 {
-		C.Security.JWTExpireHours = 24
+		C.Security.JWTExpireHours = 2
 	}
 	if C.Security.RateLimit == 0 {
 		C.Security.RateLimit = 100
