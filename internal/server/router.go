@@ -174,7 +174,7 @@ func RegisterRoutes(app *fiber.App) {
 	dashboard.Get("/activity", handler.DashboardHandler.GetRecentActivity)
 
 	// Audit API (admin only)
-	audit := app.Group("/api/audit", middleware.JWTAuth(), middleware.RequireRole(model.RoleAdmin), middleware.EnforcePasswordChange())
+	audit := v1.Group("/audit", middleware.JWTAuth(), middleware.RequireRole(model.RoleAdmin), middleware.EnforcePasswordChange())
 	audit.Get("/logs", handler.AuditHandler.GetAuditLogs)
 	audit.Get("/stats", handler.AuditHandler.GetAuditStats)
 

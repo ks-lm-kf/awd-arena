@@ -38,7 +38,6 @@ func InitDB(dbPath string) error {
 		&model.FlagSubmission{},
 		&model.RoundScore{},
 		&model.Challenge{},
-		&model.ChallengeTemplate{},
 		&model.TeamContainer{},
 		&model.EventLog{},
 		&model.DockerImage{},

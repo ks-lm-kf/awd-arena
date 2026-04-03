@@ -30,7 +30,6 @@ var (
 	UserHandler           *userHandler
 	DockerImageHandlerObj *DockerImageHandler
 	RoundHandler          *roundHandler
-	TemplateHandlerObj    *TemplateHandler
 )
 
 func init() {
@@ -45,7 +44,6 @@ func init() {
 	DockerImageHandlerObj = NewDockerImageHandler()
 	FlagRefreshHandlerObj = NewFlagRefreshHandler(nil) // Docker client will be set later if needed
 	RoundHandler = NewRoundHandler()
-	TemplateHandlerObj = NewTemplateHandler()
 }
 
 func parseID(s string) (int64, error) {

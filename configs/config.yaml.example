@@ -6,9 +6,6 @@ server:
 database:
   sqlite_path: "data/awd.db"
 
-nats:
-  url: "nats://localhost:4222"
-
 docker:
   host: "unix:///var/run/docker.sock"
 
@@ -22,11 +19,6 @@ game:
   default_round_duration: 5m
   default_break_duration: 2m
   max_containers_per_team: 5
-
-ai:
-  enabled: true
-  rule_engine_path: "./rules/"
-  onnx_model_path: "./models/"
 
 log_level: "info"
 

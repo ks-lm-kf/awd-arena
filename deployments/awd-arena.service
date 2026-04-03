@@ -1,0 +1,31 @@
+[Unit]
+Description=AWD Arena - Attack with Defense Competition Platform
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=awd
+Group=awd
+WorkingDirectory=/opt/awd-arena
+ExecStart=/opt/awd-arena/awd-arena-server
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=awd-arena
+
+# Environment
+Environment=GIN_MODE=release
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/awd-arena/data /opt/awd-arena/log
+
+[Install]
+WantedBy=multi-user.target
