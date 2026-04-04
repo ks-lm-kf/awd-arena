@@ -54,11 +54,28 @@ func parseID(s string) (int64, error) {
 	return id, nil
 }
 
-// containsHTML checks if a string contains HTML tags
+// containsHTML checks if a string contains HTML tags using a whitelist approach.
+// Instead of blacklisting known tags (which can be bypassed with obscure tags),
+// we detect ANY < character followed by word characters (which covers all HTML tags).
 func containsHTML(s string) bool {
-	// Match common HTML tags
-	htmlTagRegex := regexp.MustCompile(`<(script|iframe|object|embed|link|meta|style|img|video|audio|source|track|canvas|svg|math|form|input|button|select|textarea|label|div|span|p|a|br|hr|table|tr|td|th|thead|tbody|ul|ol|li|h[1-6])[^>]*>`)
-	return htmlTagRegex.MatchString(strings.ToLower(s))
+	lower := strings.ToLower(s)
+	// Match any HTML-like tag: < followed by a letter (covers ALL tags)
+	if matched, _ := regexp.MatchString(`<\s*[a-zA-Z]`, lower); matched {
+		return true
+	}
+	// Also match unclosed tags: <script (no >) which browsers may still execute
+	if matched, _ := regexp.MatchString(`<\s*/?\s*[a-zA-Z][^>]*$`, lower); matched {
+		return true
+	}
+	// Match event handlers in attributes: on*=
+	if matched, _ := regexp.MatchString(`\bon\w+\s*=`, lower); matched {
+		return true
+	}
+	// Match javascript: / vbscript: / data: URLs
+	if matched, _ := regexp.MatchString(`(javascript|vbscript|data)\s*:`, lower); matched {
+		return true
+	}
+	return false
 }
 
 // sanitizeInput sanitizes user input by escaping HTML special characters
@@ -312,15 +329,16 @@ func (h *gameHandler) Get(c fiber.Ctx) error {
 }
 
 type createGameRequest struct {
-	Title         string  `json:"title"`
-	Description   string  `json:"description"`
-	Mode          string  `json:"mode"`
-	RoundDuration int     `json:"round_duration"`
-	BreakDuration int     `json:"break_duration"`
-	TotalRounds   int     `json:"total_rounds"`
-	FlagFormat    string  `json:"flag_format"`
-	AttackWeight  float64 `json:"attack_weight"`
-	DefenseWeight float64 `json:"defense_weight"`
+	Title           string  `json:"title"`
+	Description     string  `json:"description"`
+	Mode            string  `json:"mode"`
+	RoundDuration   int     `json:"round_duration"`
+	BreakDuration   int     `json:"break_duration"`
+	TotalRounds     int     `json:"total_rounds"`
+	FlagFormat      string  `json:"flag_format"`
+	AttackWeight    float64 `json:"attack_weight"`
+	DefenseWeight   float64 `json:"defense_weight"`
+	FirstBloodBonus float64 `json:"first_blood_bonus"`
 }
 
 func (h *gameHandler) Create(c fiber.Ctx) error {
@@ -357,17 +375,18 @@ func (h *gameHandler) Create(c fiber.Ctx) error {
 	userID, _ := c.Locals("user_id").(int64)
 
 	game := &model.Game{
-		Title:         sanitizedTitle,
-		Description:   sanitizedDesc,
-		Mode:          req.Mode,
-		Status:        "draft",
-		RoundDuration: req.RoundDuration,
-		BreakDuration: req.BreakDuration,
-		TotalRounds:   req.TotalRounds,
-		FlagFormat:    req.FlagFormat,
-		AttackWeight:  req.AttackWeight,
-		DefenseWeight: req.DefenseWeight,
-		CreatedBy:     userID,
+		Title:           sanitizedTitle,
+		Description:     sanitizedDesc,
+		Mode:            req.Mode,
+		Status:          "draft",
+		RoundDuration:   req.RoundDuration,
+		BreakDuration:   req.BreakDuration,
+		TotalRounds:     req.TotalRounds,
+		FlagFormat:      req.FlagFormat,
+		AttackWeight:    req.AttackWeight,
+		DefenseWeight:   req.DefenseWeight,
+		FirstBloodBonus: req.FirstBloodBonus,
+		CreatedBy:       userID,
 	}
 	if game.Mode == "" {
 		game.Mode = "awd_score"
@@ -389,6 +408,9 @@ func (h *gameHandler) Create(c fiber.Ctx) error {
 	}
 	if game.DefenseWeight == 0 {
 		game.DefenseWeight = 0.5
+	}
+	if game.FirstBloodBonus == 0 {
+		game.FirstBloodBonus = 0.1
 	}
 
 	if err := h.svc.CreateGame(c.Context(), game); err != nil {
@@ -446,6 +468,9 @@ func (h *gameHandler) Update(c fiber.Ctx) error {
 	}
 	if req.DefenseWeight > 0 {
 		game.DefenseWeight = req.DefenseWeight
+	}
+	if req.FirstBloodBonus > 0 {
+		game.FirstBloodBonus = req.FirstBloodBonus
 	}
 	if err := h.svc.UpdateGame(c.Context(), game); err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
@@ -627,7 +652,10 @@ func (h *teamHandler) Create(c fiber.Ctx) error {
 		team.Description = sanitizedDesc
 	}
 	if req.AvatarURL != "" {
-		team.AvatarURL = req.AvatarURL
+		if containsHTML(req.AvatarURL) {
+			return c.Status(400).JSON(fiber.Map{"code": 400, "message": "avatar URL contains invalid characters"})
+		}
+		team.AvatarURL = sanitizeInput(req.AvatarURL)
 	}
 	// Save the updated team
 	if err := database.GetDB().Save(&team).Error; err != nil {
@@ -674,6 +702,10 @@ func (h *flagHandler) Submit(c fiber.Ctx) error {
 	var attackerTeamID int64
 	if teamIDPtr, ok := teamIDVal.(*int64); ok && teamIDPtr != nil {
 		attackerTeamID = *teamIDPtr
+	}
+
+	if attackerTeamID == 0 {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "用户未加入任何队伍，无法提交 Flag"})
 	}
 
 	// Get current round from game
