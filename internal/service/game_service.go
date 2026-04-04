@@ -197,7 +197,7 @@ func (s *GameService) StopGame(ctx context.Context, gameID int64) error {
 	return nil
 }
 
-// ResetGame resets a game and cleans up containers.
+// ResetGame resets a game and cleans up containers and scoring data.
 func (s *GameService) ResetGame(ctx context.Context, gameID int64) error {
 	db := database.GetDB()
 	if db == nil {
@@ -211,6 +211,11 @@ func (s *GameService) ResetGame(ctx context.Context, gameID int64) error {
 			logger.Error("reset cleanup failed", "game", gameID, "error", err)
 		}
 	}()
+
+	// Clean up scoring data
+	db.Where("game_id = ?", gameID).Delete(&model.FlagSubmission{})
+	db.Where("game_id = ?", gameID).Delete(&model.RoundScore{})
+	db.Where("game_id = ?", gameID).Delete(&model.FlagRecord{})
 
 	return db.Model(&model.Game{}).Where("id = ?", gameID).Updates(map[string]interface{}{
 		"status":        "draft",

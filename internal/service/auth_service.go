@@ -71,10 +71,18 @@ func (s *AuthService) Register(ctx context.Context, username, password, role str
 		return err
 	}
 
+	userRole := "player"
+	if role != "" {
+		switch role {
+		case "admin", "organizer", "player":
+			userRole = role
+		}
+	}
+
 	user := model.User{
 		Username:           username,
 		Password:           hashed,
-		Role:               "player",
+		Role:               userRole,
 		TeamID:             teamID,
 		MustChangePassword: true,
 	}

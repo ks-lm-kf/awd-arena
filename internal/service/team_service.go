@@ -86,19 +86,23 @@ func (s *TeamService) AddMember(ctx context.Context, teamID int64, userID int64)
 		return errors.New("database not initialized")
 	}
 
-	// Check if team exists
 	var team model.Team
 	if err := db.First(&team, teamID).Error; err != nil {
 		return errors.New("team not found")
 	}
 
-	// Check if user exists
 	var user model.User
 	if err := db.First(&user, userID).Error; err != nil {
 		return errors.New("user not found")
 	}
 
-	// Update user's team_id
+	if user.TeamID != nil && *user.TeamID == teamID {
+		return errors.New("用户已在该队伍中")
+	}
+	if user.TeamID != nil && *user.TeamID != teamID {
+		return errors.New("用户已在其他队伍中，请先移出原队伍")
+	}
+
 	return db.Model(&user).Update("team_id", teamID).Error
 }
 
