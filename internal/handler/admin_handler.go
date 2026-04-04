@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -367,7 +368,10 @@ func (h *adminHandler) CreateTeam(c fiber.Ctx) error {
 		team.Description = req.Description
 	}
 	if req.AvatarURL != "" {
-		team.AvatarURL = req.AvatarURL
+		if _, err := url.ParseRequestURI(req.AvatarURL); err != nil {
+			return c.Status(400).JSON(fiber.Map{"code": 400, "message": "invalid avatar_url"})
+		}
+		team.AvatarURL = html.EscapeString(req.AvatarURL)
 	}
 	if req.Token != "" {
 		team.Token = crypto.SHA256Hex(req.Token)
@@ -402,7 +406,10 @@ func (h *adminHandler) UpdateTeam(c fiber.Ctx) error {
 		team.Description = req.Description
 	}
 	if req.AvatarURL != "" {
-		team.AvatarURL = req.AvatarURL
+		if _, err := url.ParseRequestURI(req.AvatarURL); err != nil {
+			return c.Status(400).JSON(fiber.Map{"code": 400, "message": "invalid avatar_url"})
+		}
+		team.AvatarURL = html.EscapeString(req.AvatarURL)
 	}
 	if req.Token != "" {
 		team.Token = crypto.SHA256Hex(req.Token)
@@ -444,6 +451,10 @@ func (h *adminHandler) DeleteTeam(c fiber.Ctx) error {
 	db.Where("team_id = ?", teamID).Delete(&model.FlagRecord{})
 	// Remove flag submissions
 	db.Where("attacker_team = ? OR target_team = ?", teamID, teamID).Delete(&model.FlagSubmission{})
+	// Remove round scores
+	db.Where("team_id = ?", teamID).Delete(&model.RoundScore{})
+	// Remove score adjustments
+	db.Where("team_id = ?", teamID).Delete(&model.ScoreAdjustment{})
 	// Then delete the team
 	if err := db.Delete(&model.Team{}, id).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
@@ -490,7 +501,11 @@ func (h *adminHandler) BatchImportTeams(c fiber.Ctx) error {
 			team.Description = teamReq.Description
 		}
 		if teamReq.AvatarURL != "" {
-			team.AvatarURL = teamReq.AvatarURL
+			if _, err := url.ParseRequestURI(teamReq.AvatarURL); err != nil {
+				errors = append(errors, "Row "+strconv.Itoa(i+1)+": invalid avatar_url")
+				continue
+			}
+			team.AvatarURL = html.EscapeString(teamReq.AvatarURL)
 		}
 		if teamReq.Token != "" {
 			team.Token = crypto.SHA256Hex(teamReq.Token)
