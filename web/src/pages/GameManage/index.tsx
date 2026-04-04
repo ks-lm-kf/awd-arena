@@ -82,7 +82,7 @@ export default function GameManage() {
               <Button size="small" type="primary" icon={<PlayCircleOutlined />}>开始</Button>
             </Popconfirm>
           )}
-          {(r.status === 'running' || r.status === 'active') && (
+          {(r.status === 'running') && (
             <Popconfirm title="确定暂停比赛？" onConfirm={() => actionMutation.mutate({ action: '暂停', id: r.id })}>
               <Button size="small" icon={<PauseCircleOutlined />}>暂停</Button>
             </Popconfirm>
@@ -92,7 +92,7 @@ export default function GameManage() {
               <Button size="small" type="primary" icon={<PlayCircleOutlined />}>继续</Button>
             </Popconfirm>
           )}
-          {(r.status === 'running' || r.status === 'paused' || r.status === 'active') && (
+          {(r.status === 'running' || r.status === 'paused') && (
             <Popconfirm title="确定结束比赛？" description="结束后不可恢复，请谨慎操作！" onConfirm={() => actionMutation.mutate({ action: '结束', id: r.id })}>
               <Button size="small" danger icon={<StopOutlined />}>结束</Button>
             </Popconfirm>

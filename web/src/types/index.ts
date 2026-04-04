@@ -33,6 +33,7 @@ export interface User {
   role: 'admin' | 'organizer' | 'player'
   team_id: number | null
   team_name?: string
+  must_change_password?: boolean
   created_at: string
 }
 
@@ -43,6 +44,7 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   token: string
+  must_change_password?: boolean
   user: User
 }
 

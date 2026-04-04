@@ -102,7 +102,7 @@ export default function AttackPanelPage() {
         </Space.Compact>
       </Card>
       <Card title={<Space><HistoryOutlined />提交历史</Space>} style={{ background: '#1a1a2e', borderColor: '#2a2a4a' }}>
-        <Table dataSource={history} columns={historyColumns} rowKey={(r: any, index: number) => r.id || String(index)} pagination={{ pageSize: 10 }} size="small" />
+        <Table dataSource={history} columns={historyColumns} rowKey={(r: any) => String(r.id)} pagination={{ pageSize: 10 }} size="small" />
       </Card>
     </div>
   )

@@ -17,7 +17,11 @@ export function useAuth() {
       const res = await authApi.login({ username, password })
       setToken(res.token)
       setUser(res.user)
-      navigate('/dashboard')
+      if (res.user?.must_change_password || res.must_change_password) {
+        navigate('/change-password')
+      } else {
+        navigate('/dashboard')
+      }
     },
     [setToken, setUser, navigate],
   )
