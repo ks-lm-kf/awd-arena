@@ -80,13 +80,13 @@ export default function AdminGameManage() {
               <Button size="small" type="primary" icon={<PlayCircleOutlined />}>开始</Button>
             </Popconfirm>
           )}
-          {r.status === 'active' && r.current_phase === 'running' && (
+          {r.status === 'running' && r.current_phase === 'running' && (
             <Button size="small" icon={<PauseCircleOutlined />} onClick={() => actionMutation.mutate({ action: '暂停', id: r.id })}>暂停</Button>
           )}
-          {r.status === 'active' && r.current_phase === 'break' && (
+          {r.status === 'running' && r.current_phase === 'break' && (
             <Button size="small" type="primary" icon={<PlayCircleOutlined />} onClick={() => actionMutation.mutate({ action: '继续', id: r.id })}>继续</Button>
           )}
-          {r.status === 'active' && (
+          {r.status === 'running' && (
             <Popconfirm title="确定结束比赛？" onConfirm={() => actionMutation.mutate({ action: '结束', id: r.id })}>
               <Button size="small" danger icon={<StopOutlined />}>结束</Button>
             </Popconfirm>

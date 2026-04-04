@@ -74,18 +74,20 @@ export default function RankingPage() {
           </div>
         </Card>
       )}
-      <Card style={{ background: '#1a1a2e', borderColor: '#2a2a4a' }}>
-        <Table dataSource={rankings} rowKey="team_id" pagination={false}
-          columns={[
-            { title: '排名', dataIndex: 'rank', width: 80, render: (v: number) => v === 1 ? '🥇' : v === 2 ? '🥈' : v === 3 ? '🥉' : <Text type="secondary">#{v}</Text> },
-            { title: '队伍', dataIndex: 'team_name', render: (v: string) => <span className="font-semibold">{v}</span> },
-            { title: '总得分', dataIndex: 'total_score', render: (v: number) => <span className="text-xl font-bold text-indigo-400">{v}</span>, sorter: (a: any, b: any) => a.total_score - b.total_score, defaultSortOrder: 'ascend' as const },
-            { title: '攻击', dataIndex: 'attack_score', render: (v: number) => <Tag color="red">{v}</Tag>, sorter: (a: any, b: any) => a.attack_score - b.attack_score },
-            { title: '防御', dataIndex: 'defense_score', render: (v: number) => <Tag color="green">{v}</Tag>, sorter: (a: any, b: any) => a.defense_score - b.defense_score },
-            { title: 'Flag', dataIndex: 'flag_count', render: (v: number) => v, sorter: (a: any, b: any) => a.flag_count - b.flag_count },
-          ]}
-        />
-      </Card>
+      {selectedGame && (
+        <Card style={{ background: '#1a1a2e', borderColor: '#2a2a4a' }}>
+          <Table dataSource={rankings} rowKey="team_id" pagination={false}
+            columns={[
+              { title: '排名', dataIndex: 'rank', width: 80, render: (v: number) => v === 1 ? '🥇' : v === 2 ? '🥈' : v === 3 ? '🥉' : <Text type="secondary">#{v}</Text> },
+              { title: '队伍', dataIndex: 'team_name', render: (v: string) => <span className="font-semibold">{v}</span> },
+              { title: '总得分', dataIndex: 'total_score', render: (v: number) => <span className="text-xl font-bold text-indigo-400">{v}</span>, sorter: (a: any, b: any) => a.total_score - b.total_score, defaultSortOrder: 'ascend' as const },
+              { title: '攻击', dataIndex: 'attack_score', render: (v: number) => <Tag color="red">{v}</Tag>, sorter: (a: any, b: any) => a.attack_score - b.attack_score },
+              { title: '防御', dataIndex: 'defense_score', render: (v: number) => <Tag color="green">{v}</Tag>, sorter: (a: any, b: any) => a.defense_score - b.defense_score },
+              { title: 'Flag', dataIndex: 'flag_count', render: (v: number) => v, sorter: (a: any, b: any) => a.flag_count - b.flag_count },
+            ]}
+          />
+        </Card>
+      )}
       {!selectedGame && (
         <Card style={{ background: '#1a1a2e', borderColor: '#2a2a4a' }}>
           <div className="text-center py-12 text-gray-400"><TrophyOutlined style={{ fontSize: 48 }} /><p className="mt-4">暂无可显示的排行榜</p></div>

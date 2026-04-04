@@ -2,7 +2,7 @@ package handler
 
 import (
 	"github.com/awd-platform/awd-arena/internal/database"
-		"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3"
 	"gorm.io/gorm"
 )
 
@@ -16,16 +16,16 @@ type settingsHandler struct{}
 
 // SystemSettings represents system-wide settings
 type SystemSettings struct {
-	ID             int64   `json:"id" gorm:"primaryKey;autoIncrement"`
-	SiteName       string  `json:"site_name"`
-	Announcement   string  `json:"announcement"`
-	FlagFormat     string  `json:"flag_format"`
-	InitialScore   int     `json:"initial_score"`
-	AttackWeight   float64 `json:"attack_weight"`
-	DefenseWeight  float64 `json:"defense_weight"`
-	MaxTeamSize    int     `json:"max_team_size"`
-	RoundDuration  int     `json:"round_duration"`
-	BreakDuration  int     `json:"break_duration"`
+	ID            int64   `json:"id" gorm:"primaryKey;autoIncrement"`
+	SiteName      string  `json:"site_name"`
+	Announcement  string  `json:"announcement"`
+	FlagFormat    string  `json:"flag_format"`
+	InitialScore  int     `json:"initial_score"`
+	AttackWeight  float64 `json:"attack_weight"`
+	DefenseWeight float64 `json:"defense_weight"`
+	MaxTeamSize   int     `json:"max_team_size"`
+	RoundDuration int     `json:"round_duration"`
+	BreakDuration int     `json:"break_duration"`
 }
 
 // TableName overrides the table name.
@@ -47,7 +47,7 @@ func (h *settingsHandler) GetSettings(c fiber.Ctx) error {
 		}
 	}
 
-	return c.JSON(fiber.Map{"code": 0, "msg": "success", "data": settings})
+	return c.JSON(fiber.Map{"code": 0, "message": "success", "data": settings})
 }
 
 // UpdateSettings updates system settings
@@ -55,7 +55,7 @@ func (h *settingsHandler) GetSettings(c fiber.Ctx) error {
 func (h *settingsHandler) UpdateSettings(c fiber.Ctx) error {
 	var req SystemSettings
 	if err := c.Bind().Body(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{"code": 400, "msg": "Invalid request body"})
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "Invalid request body"})
 	}
 
 	// Validate
@@ -92,7 +92,7 @@ func (h *settingsHandler) UpdateSettings(c fiber.Ctx) error {
 		}
 	}
 
-	return c.JSON(fiber.Map{"code": 0, "msg": "Settings updated successfully", "data": req})
+	return c.JSON(fiber.Map{"code": 0, "message": "Settings updated successfully", "data": req})
 }
 
 func defaultSettings() *SystemSettings {

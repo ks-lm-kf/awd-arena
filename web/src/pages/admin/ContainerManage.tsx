@@ -17,7 +17,7 @@ interface ContainerInfo {
   challenge_name?: string
   container_id: string
   ip_address: string
-  port_mapping: string
+  port_mapping: Record<string, number>
   status: string
   ssh_user?: string
   ssh_password?: string
@@ -90,7 +90,7 @@ export default function ContainerManage() {
       title: '端口映射',
       dataIndex: 'port_mapping',
       width: 120,
-      render: (mapping: string) => mapping ? <Text className="text-xs">{mapping}</Text> : <Text type="secondary">-</Text>
+      render: (mapping: Record<string, number>) => mapping && Object.keys(mapping).length > 0 ? <Text className="text-xs">{Object.entries(mapping).map(([k, v]) => `${k}:${v}`).join(', ')}</Text> : <Text type="secondary">-</Text>
     },
     {
       title: '容器ID',
@@ -195,7 +195,7 @@ export default function ContainerManage() {
             <Descriptions.Item label="题目名称">{detailContainer.challenge_name || '-'}</Descriptions.Item>
             <Descriptions.Item label="状态"><Tag color={statusColor(detailContainer.status)}>{statusLabel(detailContainer.status)}</Tag></Descriptions.Item>
             <Descriptions.Item label="IP地址"><code>{detailContainer.ip_address || '-'}</code></Descriptions.Item>
-            <Descriptions.Item label="端口映射">{detailContainer.port_mapping || '-'}</Descriptions.Item>
+            <Descriptions.Item label="端口映射">{detailContainer.port_mapping && Object.keys(detailContainer.port_mapping).length > 0 ? Object.entries(detailContainer.port_mapping).map(([k, v]) => `${k}:${v}`).join(', ') : '-'}</Descriptions.Item>
             <Descriptions.Item label="容器ID"><code className="text-xs">{detailContainer.container_id || '-'}</code></Descriptions.Item>
             {detailContainer.ssh_user && <Descriptions.Item label="SSH用户">{detailContainer.ssh_user}</Descriptions.Item>}
             {detailContainer.ssh_password && <Descriptions.Item label="SSH密码"><code>{detailContainer.ssh_password}</code></Descriptions.Item>}

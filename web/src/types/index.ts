@@ -114,7 +114,7 @@ export interface Challenge {
   image_tag: string
   difficulty: Difficulty
   base_score: number
-  exposed_ports: { container: number; protocol: string }[]
+  exposed_ports: string
   cpu_limit: number
   mem_limit: number
   created_at: string

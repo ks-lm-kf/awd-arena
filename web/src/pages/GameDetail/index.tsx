@@ -25,21 +25,6 @@ const { Title, Text } = Typography
 const { Option } = Select
 const { TabPane } = Tabs
 
-// Helper to safely parse exposed_ports (can be string or array)
-const parseExposedPorts = (ports: any): { container: number; protocol: string }[] => {
-  if (!ports) return []
-  if (Array.isArray(ports)) return ports
-  if (typeof ports === 'string') {
-    try {
-      const parsed = JSON.parse(ports)
-      return Array.isArray(parsed) ? parsed : []
-    } catch {
-      return []
-    }
-  }
-  return []
-}
-
 
 const modeLabel: Record<GameMode, string> = { awd_score: 'AWD 经典', awd_mix: '攻防混合', koh: '山顶争夺' }
 
@@ -208,7 +193,7 @@ export default function GameDetail() {
         </Tooltip>
       ),
     },
-    { title: '端口', dataIndex: 'exposed_ports', width: 100, render: (ports: any[]) => Array.isArray(ports) ? ports.map(p => p.container).join(', ') || '-' : '-' },
+    { title: '端口', dataIndex: 'exposed_ports', width: 100, render: (ports: string) => ports ? ports : '-' },
     { title: 'CPU', dataIndex: 'cpu_limit', width: 80, render: (v: number) => v ? `${v}` : '-' },
     { title: '内存', dataIndex: 'mem_limit', width: 80, render: (v: number) => v ? `${v}MB` : '-' },
     {
@@ -224,7 +209,7 @@ export default function GameDetail() {
               editChallengeForm.setFieldsValue({
                 ...r,
                 image_name: `${r.image_name}:${r.image_tag}`,
-                exposed_ports: Array.isArray(r.exposed_ports) ? r.exposed_ports.map(p => p.container).join(',') : '',
+                exposed_ports: r.exposed_ports || '',
               })
               setEditChallengeModalOpen(true)
             }}

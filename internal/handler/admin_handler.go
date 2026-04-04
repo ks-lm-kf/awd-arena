@@ -550,16 +550,23 @@ func (h *adminHandler) ResetTeam(c fiber.Ctx) error {
 // --- Score Adjustment ---
 
 type adjustScoreRequest struct {
-	GameID int64   `json:"game_id"`
-	TeamID int64   `json:"team_id"`
-	Amount float64 `json:"amount"`
-	Reason string  `json:"reason"`
+	GameID     int64   `json:"game_id"`
+	TeamID     int64   `json:"team_id"`
+	Amount     float64 `json:"amount"`
+	Adjustment float64 `json:"adjustment"`
+	Reason     string  `json:"reason"`
 }
 
 func (h *adminHandler) AdjustScore(c fiber.Ctx) error {
 	var req adjustScoreRequest
 	if err := c.Bind().Body(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "invalid request body"})
+	}
+	if req.Amount == 0 && req.Adjustment != 0 {
+		req.Amount = req.Adjustment
+	}
+	if req.Amount == 0 {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "amount or adjustment is required and must be non-zero"})
 	}
 	if req.GameID == 0 || req.TeamID == 0 {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "game_id and team_id are required"})
@@ -660,6 +667,9 @@ func (h *adminHandler) AddTeamToGame(c fiber.Ctx) error {
 	if err := db.Create(gameTeam).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
+
+	// Reload with Team association
+	db.Preload("Team").First(gameTeam, gameTeam.ID)
 
 	// Log the action
 	h.logAdminAction(c, "add_team", "game", gameID, "Added team "+team.Name+" to game "+game.Title, req)

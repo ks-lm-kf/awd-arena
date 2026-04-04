@@ -25,6 +25,12 @@ client.interceptors.response.use(
       localStorage.removeItem('user')
       window.location.href = '/login'
     }
+    if (err.response?.status === 403) {
+      const msg = err.response?.data?.message || ''
+      if (msg.includes('password') || msg.includes('密码')) {
+        window.location.href = '/change-password'
+      }
+    }
     return Promise.reject(err)
   },
 )

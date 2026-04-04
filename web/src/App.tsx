@@ -25,7 +25,6 @@ import AdminTeamManagePage from '@/pages/admin/TeamManage'
 import ContainerManagePage from '@/pages/admin/ContainerManage'
 // New pages
 import AuditPage from '@/pages/Audit'
-import TemplatesPage from '@/pages/Templates'
 import GameDetailPage from '@/pages/GameDetail'
 // @ts-ignore
 import '@/styles/index.css'
@@ -152,11 +151,6 @@ function App() {
                 {/* Audit logs - admin only */}
                 <Route path="/audit" element={
                   <ProtectedRoute requireRole={['admin']}><AuditPage /></ProtectedRoute>
-                } />
-
-                {/* Templates management - admin only */}
-                <Route path="/templates" element={
-                  <ProtectedRoute requireRole={['admin']}><TemplatesPage /></ProtectedRoute>
                 } />
               </Route>
               <Route path="*" element={<Navigate to="/dashboard" replace />} />

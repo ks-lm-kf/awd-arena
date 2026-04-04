@@ -62,16 +62,21 @@ func (s *AuthService) Register(ctx context.Context, username, password, role str
 		return errors.New("database not initialized")
 	}
 
+	if err := validatePasswordStrength(password, username); err != nil {
+		return err
+	}
+
 	hashed, err := crypto.HashPassword(password)
 	if err != nil {
 		return err
 	}
 
 	user := model.User{
-		Username: username,
-		Password: hashed,
-		Role:     "player",
-		TeamID:   teamID,
+		Username:           username,
+		Password:           hashed,
+		Role:               "player",
+		TeamID:             teamID,
+		MustChangePassword: true,
 	}
 	return db.Create(&user).Error
 }
@@ -89,10 +94,11 @@ func (s *AuthService) GetUser(ctx context.Context, userID int64) (*UserInfo, err
 	}
 
 	return &UserInfo{
-		ID:       user.ID,
-		Username: user.Username,
-		Role:     user.Role,
-		TeamID:   user.TeamID,
+		ID:                 user.ID,
+		Username:           user.Username,
+		Role:               user.Role,
+		TeamID:             user.TeamID,
+		MustChangePassword: user.MustChangePassword,
 	}, nil
 }
 
@@ -193,16 +199,21 @@ func (s *AuthService) RegisterWithToken(ctx context.Context, username, password,
 		teamID = &team.ID
 	}
 
+	if err := validatePasswordStrength(password, username); err != nil {
+		return "", nil, err
+	}
+
 	hashed, err := crypto.HashPassword(password)
 	if err != nil {
 		return "", nil, err
 	}
 
 	user := model.User{
-		Username: username,
-		Password: hashed,
-		Role:     "player",
-		TeamID:   teamID,
+		Username:           username,
+		Password:           hashed,
+		Role:               "player",
+		TeamID:             teamID,
+		MustChangePassword: true,
 	}
 	if err := db.Create(&user).Error; err != nil {
 		return "", nil, err
@@ -275,6 +286,10 @@ func (s *AuthService) RegisterWithTokenAndRole(ctx context.Context, username, pa
 		teamID = &team.ID
 	}
 
+	if err := validatePasswordStrength(password, username); err != nil {
+		return "", nil, err
+	}
+
 	hashed, err := crypto.HashPassword(password)
 	if err != nil {
 		return "", nil, err
@@ -286,10 +301,11 @@ func (s *AuthService) RegisterWithTokenAndRole(ctx context.Context, username, pa
 	}
 
 	user := model.User{
-		Username: username,
-		Password: hashed,
-		Role:     role,
-		TeamID:   teamID,
+		Username:           username,
+		Password:           hashed,
+		Role:               role,
+		TeamID:             teamID,
+		MustChangePassword: true,
 	}
 	if err := db.Create(&user).Error; err != nil {
 		return "", nil, err

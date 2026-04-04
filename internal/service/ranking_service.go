@@ -10,12 +10,13 @@ import (
 
 // RankingItem represents a team in the ranking list.
 type RankingItem struct {
-	Rank        int     `json:"rank"`
-	TeamID      int64   `json:"team_id"`
-	TeamName    string  `json:"team_name"`
-	Score       float64 `json:"score"`
-	AttackScore float64 `json:"attack_score"`
-	DefenseLoss float64 `json:"defense_loss"`
+	Rank         int     `json:"rank"`
+	TeamID       int64   `json:"team_id"`
+	TeamName     string  `json:"team_name"`
+	TotalScore   float64 `json:"total_score"`
+	AttackScore  float64 `json:"attack_score"`
+	DefenseScore float64 `json:"defense_score"`
+	FlagCount    int     `json:"flag_count"`
 }
 
 // RankingService handles ranking calculations.
@@ -38,11 +39,13 @@ func (s *RankingService) GetRankings(ctx context.Context, gameID int64) ([]Ranki
 	// Calculate attack and defense scores from submissions
 	attackScores := make(map[int64]float64)
 	defenseLosses := make(map[int64]float64)
+	flagCounts := make(map[int64]int)
 	var subs []model.FlagSubmission
 	db.Where("game_id = ? AND is_correct = ?", gameID, true).Find(&subs)
 	for _, sub := range subs {
 		attackScores[sub.AttackerTeam] += sub.PointsEarned
 		defenseLosses[sub.TargetTeam] += sub.PointsEarned
+		flagCounts[sub.AttackerTeam]++
 	}
 
 	items := make([]RankingItem, len(teams))
@@ -52,12 +55,13 @@ func (s *RankingService) GetRankings(ctx context.Context, gameID int64) ([]Ranki
 			rank = i + 1
 		}
 		items[i] = RankingItem{
-			Rank:        rank,
-			TeamID:      t.ID,
-			TeamName:    t.Name,
-			Score:       t.Score,
-			AttackScore: attackScores[t.ID],
-			DefenseLoss: defenseLosses[t.ID],
+			Rank:         rank,
+			TeamID:       t.ID,
+			TeamName:     t.Name,
+			TotalScore:   t.Score,
+			AttackScore:  attackScores[t.ID],
+			DefenseScore: defenseLosses[t.ID],
+			FlagCount:    flagCounts[t.ID],
 		}
 	}
 	return items, nil
@@ -84,12 +88,13 @@ func (s *RankingService) GetRoundRankings(ctx context.Context, gameID int64, rou
 		var team model.Team
 		db.First(&team, rs.TeamID)
 		items[i] = RankingItem{
-			Rank:        rs.Rank,
-			TeamID:      rs.TeamID,
-			TeamName:    team.Name,
-			Score:       rs.TotalScore,
-			AttackScore: rs.AttackScore,
-			DefenseLoss: rs.DefenseScore,
+			Rank:         rs.Rank,
+			TeamID:       rs.TeamID,
+			TeamName:     team.Name,
+			TotalScore:   rs.TotalScore,
+			AttackScore:  rs.AttackScore,
+			DefenseScore: rs.DefenseScore,
+			FlagCount:    0,
 		}
 	}
 	return items, nil

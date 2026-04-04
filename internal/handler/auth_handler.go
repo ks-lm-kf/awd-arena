@@ -458,6 +458,20 @@ func (h *gameHandler) Start(c fiber.Ctx) error {
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 	}
+
+	// Check preconditions: game must have at least 1 team and 1 challenge
+	db := database.GetDB()
+	var teamCount int64
+	db.Model(&model.GameTeam{}).Where("game_id = ?", id).Count(&teamCount)
+	if teamCount == 0 {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "比赛至少需要关联一支队伍"})
+	}
+	var challengeCount int64
+	db.Model(&model.Challenge{}).Where("game_id = ?", id).Count(&challengeCount)
+	if challengeCount == 0 {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "比赛至少需要配置一道题目"})
+	}
+
 	if err := h.svc.StartGame(c.Context(), id); err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
@@ -545,8 +559,9 @@ func (h *teamHandler) List(c fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	_, _, role, _ := middleware.GetCurrentUser(c)
-	if role != model.RoleAdmin {
-		for i := range teams {
+	for i := range teams {
+		teams[i].RawToken = ""
+		if role != model.RoleAdmin {
 			if len(teams[i].Token) > 4 {
 				teams[i].Token = teams[i].Token[:4] + "****"
 			} else if teams[i].Token != "" {
@@ -566,6 +581,7 @@ func (h *teamHandler) Get(c fiber.Ctx) error {
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "team not found"})
 	}
+	team.RawToken = ""
 	_, _, role, _ := middleware.GetCurrentUser(c)
 	if role != model.RoleAdmin {
 		if len(team.Token) > 4 {
@@ -666,6 +682,11 @@ func (h *flagHandler) Submit(c fiber.Ctx) error {
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "game not found"})
 	}
+
+	if game.Status != "running" {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "比赛未在进行中，无法提交 Flag"})
+	}
+
 	round := int64(game.CurrentRound)
 
 	correct, points, err := h.svc.SubmitFlag(c.Context(), gameID, round, attackerTeamID, req.FlagValue)
@@ -971,7 +992,11 @@ func (h *userHandler) Create(c fiber.Ctx) error {
 	}
 
 	if err := h.svc.Register(c.Context(), sanitizedUsername, req.Password, sanitizedRole, req.TeamID); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "UNIQUE") || strings.Contains(errMsg, "unique") || strings.Contains(errMsg, "duplicate") {
+			return c.Status(400).JSON(fiber.Map{"code": 400, "message": "username already exists"})
+		}
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": errMsg})
 	}
 	return c.Status(201).JSON(fiber.Map{"code": 0, "message": "ok"})
 }
