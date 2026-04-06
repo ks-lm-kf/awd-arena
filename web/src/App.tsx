@@ -14,9 +14,7 @@ const LoadingFallback = () => (
 )
 
 const DashboardPage = lazy(() => import('@/pages/Dashboard'))
-const GameManagePage = lazy(() => import('@/pages/GameManage'))
 const RankingPage = lazy(() => import('@/pages/Ranking'))
-const TeamManagePage = lazy(() => import('@/pages/TeamManage'))
 const AttackPanelPage = lazy(() => import('@/pages/AttackPanel'))
 const DefensePanelPage = lazy(() => import('@/pages/DefensePanel'))
 const SettingsPage = lazy(() => import('@/pages/Settings'))
@@ -125,24 +123,8 @@ function App() {
                 <Route path="/profile" element={<ProfilePage />} />
 
                 {/* Admin only */}
-                <Route path="/games" element={
-                  <ProtectedRoute requireRole={['admin']}><GameManagePage /></ProtectedRoute>
-                } />
-                <Route path="/games/:id" element={
-                  <ProtectedRoute requireRole={['admin']}><GameDetailPage /></ProtectedRoute>
-                } />
-                <Route path="/games/:id/ranking" element={
-                  <ProtectedRoute requireRole={['admin']}><RankingPage /></ProtectedRoute>
-                } />
-                <Route path="/games/:id/attack" element={
-                  <ProtectedRoute requireRole={['admin']}><AttackPanelPage /></ProtectedRoute>
-                } />
-                <Route path="/games/:id/defense" element={
-                  <ProtectedRoute requireRole={['admin']}><DefensePanelPage /></ProtectedRoute>
-                } />
-                <Route path="/teams" element={
-                  <ProtectedRoute requireRole={['admin']}><TeamManagePage /></ProtectedRoute>
-                } />
+                <Route path="/games" element={<Navigate to="/admin/games" replace />} />
+                <Route path="/teams" element={<Navigate to="/admin/teams" replace />} />
                 <Route path="/users" element={
                   <ProtectedRoute requireRole={['admin']}><UserManagePage /></ProtectedRoute>
                 } />
@@ -156,6 +138,18 @@ function App() {
                 {/* Judge/Referee routes (admin + organizer) */}
                 <Route path="/admin/games" element={
                   <ProtectedRoute requireRole={['admin', 'organizer']}><AdminGameManagePage /></ProtectedRoute>
+                } />
+                <Route path="/admin/games/:id" element={
+                  <ProtectedRoute requireRole={['admin', 'organizer']}><GameDetailPage /></ProtectedRoute>
+                } />
+                <Route path="/admin/games/:id/ranking" element={
+                  <ProtectedRoute requireRole={['admin', 'organizer']}><RankingPage /></ProtectedRoute>
+                } />
+                <Route path="/admin/games/:id/attack" element={
+                  <ProtectedRoute requireRole={['admin', 'organizer']}><AttackPanelPage /></ProtectedRoute>
+                } />
+                <Route path="/admin/games/:id/defense" element={
+                  <ProtectedRoute requireRole={['admin', 'organizer']}><DefensePanelPage /></ProtectedRoute>
                 } />
                 <Route path="/admin/teams" element={
                   <ProtectedRoute requireRole={['admin', 'organizer']}><AdminTeamManagePage /></ProtectedRoute>

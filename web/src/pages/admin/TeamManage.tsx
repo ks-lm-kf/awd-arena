@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Card, Table, Button, Modal, Form, Input, Space, Typography, Tag, message, Popconfirm, Upload, InputNumber, Divider, Spin } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined, ReloadOutlined, DollarOutlined } from '@ant-design/icons'
+import { Card, Table, Button, Modal, Form, Input, Space, Typography, Tag, message, Popconfirm, Upload, InputNumber, Divider, Spin, AutoComplete } from 'antd'
+import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined, ReloadOutlined, DollarOutlined, UserAddOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { ColumnsType } from 'antd/es/table'
-import type { Team } from '@/types'
+import type { Team, TeamMember } from '@/types'
 import { teamApi } from '@/api/team'
 import { adminApi } from '@/api/admin'
+import { userApi } from '@/api/user'
 import { formatTime } from '@/utils/format'
 
 const { Title, Text } = Typography
@@ -22,10 +23,23 @@ export default function AdminTeamManage() {
   const [importForm] = Form.useForm()
   const [adjustScoreForm] = Form.useForm()
   const [importPreview, setImportPreview] = useState<Array<{ name: string; description?: string }>>([])
+  const [memberOpen, setMemberOpen] = useState(false)
+  const [addMemberForm] = Form.useForm()
 
   const { data: teams, isLoading } = useQuery({
     queryKey: ['admin-teams'],
     queryFn: () => teamApi.list(),
+  })
+
+  const { data: members, isLoading: membersLoading } = useQuery({
+    queryKey: ['admin-team-members', selectedTeam?.id],
+    queryFn: () => teamApi.members(selectedTeam!.id),
+    enabled: !!selectedTeam && memberOpen,
+  })
+
+  const { data: allUsers } = useQuery({
+    queryKey: ['users-all'],
+    queryFn: () => userApi.list({ page: 1, page_size: 200 }),
   })
 
   const createMutation = useMutation({
@@ -88,6 +102,20 @@ export default function AdminTeamManage() {
     onError: (err: any) => message.error(err.response?.data?.message || '调整失败'),
   })
 
+  const addMemberMutation = useMutation({
+    mutationFn: ({ teamId, userId }: { teamId: number; userId: number }) => teamApi.addMember(teamId, { user_id: userId }),
+    onSuccess: () => { message.success('成员已添加'); addMemberForm.resetFields(); queryClient.invalidateQueries({ queryKey: ['admin-team-members'] }); queryClient.invalidateQueries({ queryKey: ['admin-teams'] }) },
+    onError: (err: any) => message.error(err.response?.data?.message || '添加失败'),
+  })
+
+  const removeMemberMutation = useMutation({
+    mutationFn: ({ teamId, userId }: { teamId: number; userId: number }) => teamApi.removeMember(teamId, userId),
+    onSuccess: () => { message.success('成员已移除'); queryClient.invalidateQueries({ queryKey: ['admin-team-members'] }); queryClient.invalidateQueries({ queryKey: ['admin-teams'] }) },
+    onError: (err: any) => message.error(err.response?.data?.message || '移除失败'),
+  })
+
+  const availableUsers = allUsers?.items?.filter((u: any) => !u.team_id) || []
+
   const handleImportFile = (file: File) => {
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -134,6 +162,8 @@ export default function AdminTeamManage() {
       ),
     },
     { title: '描述', dataIndex: 'description', ellipsis: true },
+    { title: '成员数', dataIndex: 'member_count', width: 80 },
+    { title: 'Token', dataIndex: 'token', width: 160, render: (t: string) => t ? <Tag>{t}</Tag> : '-' },
     { title: '分数', dataIndex: 'score', width: 100, render: (s: number) => <Tag color="blue">{s || 0}</Tag> },
     { title: '创建时间', dataIndex: 'created_at', width: 160, render: (t: string) => formatTime(t) },
     {
@@ -141,6 +171,7 @@ export default function AdminTeamManage() {
       render: (_, r) => (
         <Space size="small" wrap>
           <Button size="small" icon={<EditOutlined />} onClick={() => { setSelectedTeam(r); editForm.setFieldsValue(r); setEditOpen(true) }}>编辑</Button>
+          <Button size="small" icon={<UserAddOutlined />} onClick={() => { setSelectedTeam(r); setMemberOpen(true) }}>成员</Button>
           <Button size="small" icon={<DollarOutlined />} onClick={() => { setSelectedTeam(r); setAdjustScoreOpen(true) }}>调分</Button>
           <Popconfirm title="重置队伍分数？" onConfirm={() => resetMutation.mutate(r.id)}>
             <Button size="small" icon={<ReloadOutlined />}>重置</Button>
@@ -245,6 +276,38 @@ export default function AdminTeamManage() {
             <Text type="secondary">当前分数: {selectedTeam.score || 0}</Text>
           )}
         </Form>
+      </Modal>
+
+      {/* Member Management Modal */}
+      <Modal title={`成员管理 — ${selectedTeam?.name || ''}`} open={memberOpen}
+        onCancel={() => { setMemberOpen(false); setSelectedTeam(null) }}
+        footer={null} width={600}>
+        <Space style={{ marginBottom: 16, width: '100%' }}>
+          <AutoComplete
+            style={{ width: 300 }}
+            placeholder="搜索并添加用户"
+            options={availableUsers.map((u: any) => ({ value: String(u.id), label: `${u.username} (${u.email || '-'})` }))}
+            onSelect={(value: string) => {
+              if (selectedTeam) addMemberMutation.mutate({ teamId: selectedTeam.id, userId: Number(value) })
+            }}
+          />
+        </Space>
+        <Table
+          columns={[
+            { title: 'ID', dataIndex: 'id', width: 60 },
+            { title: '用户名', dataIndex: 'username' },
+            { title: '角色', dataIndex: 'role', render: (r: string) => <Tag color={r === 'admin' ? 'red' : 'blue'}>{r}</Tag> },
+            {
+              title: '操作', width: 80,
+              render: (_, r: any) => selectedTeam && (
+                <Popconfirm title="确定移除该成员？" onConfirm={() => removeMemberMutation.mutate({ teamId: selectedTeam.id, userId: r.id })}>
+                  <Button size="small" danger>移除</Button>
+                </Popconfirm>
+              ),
+            },
+          ]}
+          dataSource={members} rowKey="id" pagination={false} size="small" loading={membersLoading}
+        />
       </Modal>
     </div>
   )

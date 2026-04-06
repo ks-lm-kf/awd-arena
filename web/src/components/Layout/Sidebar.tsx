@@ -25,8 +25,8 @@ const { Text } = Typography
 
 const adminMenuItems = [
   { key: '/dashboard', icon: <DashboardOutlined />, label: '仪表盘' },
-  { key: '/games', icon: <ControlOutlined />, label: '比赛管理' },
-  { key: '/teams', icon: <TeamOutlined />, label: '队伍管理' },
+  { key: '/admin/games', icon: <ControlOutlined />, label: '比赛管理' },
+  { key: '/admin/teams', icon: <TeamOutlined />, label: '队伍管理' },
   { key: '/admin/containers', icon: <AppstoreOutlined />, label: '容器管理' },
   { key: '/users', icon: <UserOutlined />, label: '用户管理' },
   { key: '/docker-images', icon: <AppstoreOutlined />, label: '镜像管理' },

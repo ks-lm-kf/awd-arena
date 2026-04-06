@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router'
 import { Card, Table, Button, Tag, Space, Modal, Form, Input, Select, InputNumber, Typography, message, Popconfirm, Tooltip, Spin } from 'antd'
-import { PlusOutlined, PlayCircleOutlined, PauseCircleOutlined, StopOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, HistoryOutlined, TeamOutlined } from '@ant-design/icons'
+import { PlusOutlined, PlayCircleOutlined, PauseCircleOutlined, StopOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, HistoryOutlined, EyeOutlined, TeamOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { ColumnsType } from 'antd/es/table'
 import type { Game, GameStatus, GameMode } from '@/types'
@@ -13,6 +14,7 @@ const { Title, Text } = Typography
 const modeLabel: Record<GameMode, string> = { awd_score: 'AWD 经典', awd_mix: '攻防混合', koh: '山顶争夺' }
 
 export default function AdminGameManage() {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Game | null>(null)
@@ -74,6 +76,7 @@ export default function AdminGameManage() {
       title: '操作', width: 280, fixed: 'right',
       render: (_, r) => (
         <Space size="small" wrap>
+          <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/admin/games/${r.id}`)}>详情</Button>
           {r.status === 'draft' && <Button size="small" icon={<EditOutlined />} onClick={() => { setEditing(r); form.setFieldsValue(r); setModalOpen(true) }}>编辑</Button>}
           {r.status === 'draft' && (
             <Popconfirm title="确定开始比赛？" onConfirm={() => actionMutation.mutate({ action: '开始', id: r.id })}>

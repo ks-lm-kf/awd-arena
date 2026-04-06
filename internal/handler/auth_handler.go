@@ -363,6 +363,16 @@ func (h *gameHandler) Create(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "title must be at least 2 characters"})
 	}
 
+	if req.TotalRounds < 0 {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "total_rounds must be non-negative"})
+	}
+	if req.RoundDuration < 0 {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "round_duration must be non-negative"})
+	}
+	if req.BreakDuration < 0 {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "break_duration must be non-negative"})
+	}
+
 	// XSS Protection: Validate and sanitize title
 	sanitizedTitle, err := validateAndSanitizeInput(req.Title, "title")
 	if err != nil {
@@ -1215,6 +1225,13 @@ func (h *teamHandler) AddMember(c fiber.Ctx) error {
 	}
 
 	if err := h.svc.AddMember(c.Context(), teamID, req.UserID); err != nil {
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "not found") {
+			return c.Status(404).JSON(fiber.Map{"code": 404, "message": errMsg})
+		}
+		if strings.Contains(errMsg, "已在") {
+			return c.Status(409).JSON(fiber.Map{"code": 409, "message": errMsg})
+		}
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "member added successfully"})
