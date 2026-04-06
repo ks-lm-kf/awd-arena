@@ -56,8 +56,8 @@ export default function AttackPanelPage() {
     if (!selectedGame || !flagInput.trim()) { message.warning('请输入 flag'); return }
     setSubmitting(true)
     try {
-      const result = await flagApi.submit(selectedGame, { flag: flagInput.trim(), target_team_id: targetTeamId })
-      if (result.is_correct) { message.success(`Flag 正确！+${result.points_earned} 分`); setFlagInput('') }
+      const result = await flagApi.submit(selectedGame, { flag_value: flagInput.trim() })
+      if (result.correct) { message.success(`Flag 正确！+${result.points} 分`); setFlagInput('') }
       else { message.error('Flag 错误') }
       flagApi.history(selectedGame).then(setHistory).catch((err) => { console.error('Failed to load data:', err); message.error('加载数据失败') })
     } catch (err: any) { message.error(err?.response?.data?.message || '提交失败') }
@@ -78,7 +78,7 @@ export default function AttackPanelPage() {
 
   const historyColumns = [
     { title: '时间', dataIndex: 'submitted_at', key: 'submitted_at', width: 160, render: (t: string) => dayjs(t).format('HH:mm:ss') },
-    { title: 'Flag', dataIndex: 'flag', key: 'flag', ellipsis: true, render: (f: string) => <code className="text-xs">{f}</code> },
+    { title: 'Flag', dataIndex: 'flag_value', key: 'flag_value', ellipsis: true, render: (f: string) => <code className="text-xs">{f}</code> },
     { title: '结果', dataIndex: 'is_correct', key: 'is_correct', width: 80, render: (c: boolean) => <Tag color={c ? 'success' : 'error'}>{c ? '正确' : '错误'}</Tag> },
     { title: '得分', dataIndex: 'points_earned', key: 'points_earned', width: 80, render: (p: number) => p > 0 ? <Text className="text-green-400">+{p}</Text> : <Text className="text-gray-500">0</Text> },
   ]

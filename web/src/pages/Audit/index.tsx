@@ -15,7 +15,7 @@ export default function AuditPage() {
     setError(null)
     try {
       const response = await auditApi.getLogs(page, pageSize)
-      setData(response.logs)
+      setData(response.items)
       setPagination(prev => ({ ...prev, current: page, pageSize, total: response.total }))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch audit logs')
@@ -34,8 +34,8 @@ export default function AuditPage() {
     { title: '时间', dataIndex: 'created_at', key: 'created_at', width: 180 },
     { title: '用户', dataIndex: 'username', key: 'username', width: 120 },
     { title: '操作', dataIndex: 'action', key: 'action', width: 150 },
-    { title: '目标类型', dataIndex: 'target_type', key: 'target_type', width: 120 },
-    { title: '目标ID', dataIndex: 'target_id', key: 'target_id', width: 100 },
+    { title: '目标类型', dataIndex: 'resource_type', key: 'resource_type', width: 120 },
+    { title: '目标ID', dataIndex: 'resource_id', key: 'resource_id', width: 100 },
     { title: '详情', dataIndex: 'details', key: 'details', ellipsis: true },
     { title: 'IP地址', dataIndex: 'ip_address', key: 'ip_address', width: 150 },
   ]

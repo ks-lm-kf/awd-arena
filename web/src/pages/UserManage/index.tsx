@@ -10,8 +10,8 @@ import type { User } from '@/types'
 
 const { Title } = Typography
 
-const roleColors: Record<string, string> = { admin: 'red', judge: 'blue', player: 'green' }
-const roleLabels: Record<string, string> = { admin: '管理员', judge: '裁判', player: '选手' }
+const roleColors: Record<string, string> = { admin: 'red', organizer: 'blue', player: 'green' }
+const roleLabels: Record<string, string> = { admin: '管理员', organizer: '裁判', player: '选手' }
 
 export default function UserManage() {
   const queryClient = useQueryClient()
@@ -137,7 +137,7 @@ export default function UserManage() {
             <Input placeholder="email@example.com" />
           </Form.Item>
           <Form.Item name="role" label="角色" rules={[{ required: true }]}>
-            <Select options={[{ value: 'admin', label: '管理员' }, { value: 'judge', label: '裁判' }, { value: 'player', label: '选手' }]} />
+            <Select options={[{ value: 'admin', label: '管理员' }, { value: 'organizer', label: '裁判' }, { value: 'player', label: '选手' }]} />
           </Form.Item>
         </Form>
       </Modal>
