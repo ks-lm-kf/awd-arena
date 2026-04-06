@@ -32,7 +32,7 @@ export const containerApi = {
 
   // Get containers for current user's team
   getMyContainers: (gameId: number) =>
-    get<Container[]>(`/games/${gameId}/containers`),
+    get<Container[]>(`/games/${gameId}/my-machines`),
 
   // Get my machines for attack panel (player view)
   getMyMachines: (gameId: number) =>

@@ -162,8 +162,12 @@ export interface FlagSubmission {
 }
 
 export interface SubmitFlagRequest {
-  flag: string
-  target_team_id: number
+  flag_value: string
+}
+
+export interface SubmitFlagResponse {
+  correct: boolean
+  points: number
 }
 
 // ==================== 排名 ====================
@@ -175,8 +179,7 @@ export interface RankingItem {
   total_score: number
   attack_score: number
   defense_score: number
-  flag_count: number
-  score_change?: number
+  first_bloods: number
 }
 
 export interface RoundRanking {

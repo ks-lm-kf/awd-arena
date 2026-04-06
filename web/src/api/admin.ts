@@ -18,7 +18,7 @@ export interface AdminLog {
 export interface AdjustScoreRequest {
   game_id: number
   team_id: number
-  amount: number
+  adjust_value: number
   reason: string
 }
 
