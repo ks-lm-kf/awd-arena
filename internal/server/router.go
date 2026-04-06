@@ -47,6 +47,7 @@ func RegisterRoutes(app *fiber.App) {
 	teams.Get("/:id/members", middleware.RequirePermission(model.PermViewRankings), handler.TeamHandler.Members)
 	teams.Post("/:id/members", middleware.RequirePermission(model.PermManageTeams), handler.TeamHandler.AddMember)
 	teams.Delete("/:id/members/:userId", middleware.RequirePermission(model.PermManageTeams), handler.TeamHandler.RemoveMember)
+	teams.Put("/:id", middleware.RequirePermission(model.PermManageTeams), handler.TeamHandler.Update)
 	teams.Delete("/:id", middleware.RequirePermission(model.PermManageTeams), handler.AdminHandler.DeleteTeam)
 
 	// Games - Players can view, Organizers can manage

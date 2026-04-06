@@ -122,8 +122,8 @@ func (h *adminHandler) CreateGame(c fiber.Ctx) error {
 
 	userID, _ := c.Locals("user_id").(int64)
 	game := &model.Game{
-		Title:         req.Title,
-		Description:   req.Description,
+		Title:         html.EscapeString(req.Title),
+		Description:   html.EscapeString(req.Description),
 		Mode:          req.Mode,
 		Status:        "draft",
 		RoundDuration: req.RoundDuration,

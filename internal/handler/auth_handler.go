@@ -667,6 +667,42 @@ func (h *teamHandler) Create(c fiber.Ctx) error {
 	return c.Status(201).JSON(fiber.Map{"code": 0, "message": "ok", "data": team})
 }
 
+func (h *teamHandler) Update(c fiber.Ctx) error {
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+	team, err := h.svc.GetTeam(c.Context(), id)
+	if err != nil {
+		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "team not found"})
+	}
+
+	var req createTeamRequest
+	if err := c.Bind().Body(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "invalid request body"})
+	}
+
+	if req.Name != "" {
+		sanitizedName, err := validateAndSanitizeInput(req.Name, "team name")
+		if err != nil {
+			return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+		}
+		team.Name = sanitizedName
+	}
+	if req.Description != "" {
+		sanitizedDesc, err := validateAndSanitizeInput(req.Description, "description")
+		if err != nil {
+			return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+		}
+		team.Description = sanitizedDesc
+	}
+
+	if err := database.GetDB().Save(team).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
+	}
+	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": team})
+}
+
 func (h *teamHandler) Members(c fiber.Ctx) error {
 	id, err := parseID(c.Params("id"))
 	if err != nil {
@@ -1100,12 +1136,12 @@ func (h *userHandler) GetUser(c fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "user not found"})
 	}
 
-	return c.JSON(fiber.Map{
+	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": fiber.Map{
 		"id":       user.ID,
 		"username": user.Username,
 		"email":    user.Email,
 		"role":     user.Role,
-	})
+	}})
 }
 
 // Resume resumes a paused game.
