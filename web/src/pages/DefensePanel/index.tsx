@@ -16,7 +16,14 @@ const containerColumns: ColumnsType<TeamContainer> = [
   { title: '靶机', dataIndex: 'challenge_name', render: (n: string) => <Text strong>{n}</Text> },
   { title: '容器状态', dataIndex: 'status', width: 100, render: (s: string) => <Tag color={statusColor(s)}>{statusLabel(s)}</Tag> },
   { title: 'IP', dataIndex: 'ip_address', width: 130, render: (ip: string) => <code className="text-xs bg-gray-800 px-1.5 py-0.5 rounded">{ip}</code> },
-  { title: '端口映射', width: 120, render: (_, r) => Object.entries(r.port_mapping).map(([c, h]) => `${c}→${h}`).join(', ') },
+  { title: '端口映射', width: 120, render: (_, r) => {
+    try {
+      const mapping = typeof r.port_mapping === 'string' ? JSON.parse(r.port_mapping || '{}') : (r.port_mapping || {})
+      return Object.keys(mapping).length > 0 ? Object.entries(mapping).map(([c, h]) => `${c}→${h}`).join(', ') : <Text type="secondary">-</Text>
+    } catch {
+      return <Text type="secondary">-</Text>
+    }
+  }},
   { title: '容器ID', dataIndex: 'container_id', width: 120, ellipsis: true, render: (id: string) => <code className="text-xs text-gray-400">{id}</code> },
 ]
 

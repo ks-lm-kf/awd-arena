@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Card, Table, Button, Tag, Space, Modal, Form, Input, Select, InputNumber, Typography, message, Popconfirm } from 'antd'
+import { Card, Table, Button, Tag, Space, Modal, Form, Input, Select, InputNumber, Typography, message, Popconfirm, Spin } from 'antd'
 import { PlusOutlined, PlayCircleOutlined, EyeOutlined, PauseCircleOutlined, StopOutlined, ReloadOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { ColumnsType } from 'antd/es/table'
@@ -122,7 +122,7 @@ export default function GameManage() {
       </div>
 
       <Card>
-        {isLoading ? <div className="flex items-center justify-center h-64" /> : (
+        {isLoading ? <div className="flex items-center justify-center h-64"><Spin /></div> : (
           <Table columns={columns} dataSource={games} rowKey="id" pagination={false} scroll={{ x: 1200 }} />
         )}
       </Card>

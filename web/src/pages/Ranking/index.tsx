@@ -83,7 +83,7 @@ export default function RankingPage() {
               { title: '总得分', dataIndex: 'total_score', render: (v: number) => <span className="text-xl font-bold text-indigo-400">{v}</span>, sorter: (a: any, b: any) => a.total_score - b.total_score, defaultSortOrder: 'ascend' as const },
               { title: '攻击', dataIndex: 'attack_score', render: (v: number) => <Tag color="red">{v}</Tag>, sorter: (a: any, b: any) => a.attack_score - b.attack_score },
               { title: '防御', dataIndex: 'defense_score', render: (v: number) => <Tag color="green">{v}</Tag>, sorter: (a: any, b: any) => a.defense_score - b.defense_score },
-              { title: 'Flag', dataIndex: 'flag_count', render: (v: number) => v, sorter: (a: any, b: any) => a.flag_count - b.flag_count },
+              { title: '首杀', dataIndex: 'first_bloods', render: (v: number) => v, sorter: (a: any, b: any) => a.first_bloods - b.first_bloods },
             ]}
           />
         </Card>

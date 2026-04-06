@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Card, Table, Button, Modal, Form, Input, Space, Typography, Tag, message, Popconfirm, Upload, InputNumber, Divider } from 'antd'
+import { Card, Table, Button, Modal, Form, Input, Space, Typography, Tag, message, Popconfirm, Upload, InputNumber, Divider, Spin } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined, ReloadOutlined, DollarOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { ColumnsType } from 'antd/es/table'
@@ -167,7 +167,7 @@ export default function AdminTeamManage() {
         <Text type="secondary" style={{ marginBottom: 16, display: 'block' }}>
           📋 仅裁判和管理员可访问。支持批量导入队伍。所有操作将被记录。
         </Text>
-        {isLoading ? <div className="flex items-center justify-center h-64" /> : (
+        {isLoading ? <div className="flex items-center justify-center h-64"><Spin /></div> : (
           <Table columns={columns} dataSource={teams} rowKey="id" scroll={{ x: 1000 }} />
         )}
       </Card>
@@ -234,7 +234,7 @@ export default function AdminTeamManage() {
           <Form.Item name="game_id" label="比赛 ID" rules={[{ required: true, message: '请输入比赛ID' }]}>
             <InputNumber style={{ width: '100%' }} placeholder="输入比赛ID" />
           </Form.Item>
-          <Form.Item name="amount" label="调整分数" rules={[{ required: true, message: '请输入调整分数' }]}
+          <Form.Item name="adjust_value" label="调整分数" rules={[{ required: true, message: '请输入调整分数' }]}
             extra="正数为加分，负数为减分">
             <InputNumber style={{ width: '100%' }} placeholder="例如: 100 或 -50" />
           </Form.Item>

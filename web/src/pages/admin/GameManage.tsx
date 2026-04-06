@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Card, Table, Button, Tag, Space, Modal, Form, Input, Select, InputNumber, Typography, message, Popconfirm, Tooltip } from 'antd'
+import { Card, Table, Button, Tag, Space, Modal, Form, Input, Select, InputNumber, Typography, message, Popconfirm, Tooltip, Spin } from 'antd'
 import { PlusOutlined, PlayCircleOutlined, PauseCircleOutlined, StopOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, HistoryOutlined, TeamOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { ColumnsType } from 'antd/es/table'
@@ -120,7 +120,7 @@ export default function AdminGameManage() {
         <Text type="secondary" style={{ marginBottom: 16, display: 'block' }}>
           📋 仅裁判和管理员可访问。所有操作将被记录。
         </Text>
-        {isLoading ? <div className="flex items-center justify-center h-64" /> : (
+        {isLoading ? <div className="flex items-center justify-center h-64"><Spin /></div> : (
           <Table columns={columns} dataSource={games} rowKey="id" scroll={{ x: 1200 }} />
         )}
       </Card>

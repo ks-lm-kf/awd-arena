@@ -16,6 +16,7 @@ import {
   CloseOutlined,
 } from '@ant-design/icons'
 import { useAuthStore } from '@/stores/authStore'
+import { authApi } from '@/api/auth'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { useEffect, useState } from 'react'
 
@@ -63,14 +64,15 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = user?.role === 'admin' || user?.role === 'organizer'
   const menuItems = isAdmin ? adminMenuItems : playerMenuItems
   const selectedKey = menuItems.find(
     (item) => location.pathname === item.key || location.pathname.startsWith(item.key + '/'),
   )?.key || '/dashboard'
 
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    try { await authApi.logout() } catch { /* ignore */ }
+    useAuthStore.getState().logout()
     navigate('/login')
   }
 
