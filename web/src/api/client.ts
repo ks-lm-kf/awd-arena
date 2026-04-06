@@ -24,11 +24,13 @@ client.interceptors.response.use(
       localStorage.removeItem('token')
       localStorage.removeItem('user')
       window.location.href = '/login'
+      return new Promise(() => {})
     }
     if (err.response?.status === 403) {
       const msg = err.response?.data?.message || ''
       if (msg.includes('password') || msg.includes('密码')) {
         window.location.href = '/change-password'
+        return new Promise(() => {})
       }
     }
     return Promise.reject(err)

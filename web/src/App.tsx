@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router'
 import { ConfigProvider, theme, Spin, message } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query'
 import { MainLayout } from '@/components/Layout'
 import DashboardPage from '@/pages/Dashboard'
 import GameManagePage from '@/pages/GameManage'
@@ -31,6 +31,16 @@ import '@/styles/index.css'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
+  queryCache: new QueryCache({
+    onError: (error: any) => {
+      if (error?.response?.status === 401 || error?.response?.status === 403) return
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (error: any) => {
+      if (error?.response?.status === 401 || error?.response?.status === 403) return
+    },
+  }),
 })
 
 function ProtectedRoute({ children, requireRole }: { children: React.ReactNode; requireRole?: string[] }) {
@@ -53,6 +63,13 @@ function ProtectedRoute({ children, requireRole }: { children: React.ReactNode; 
       <Spin size="large" />
     </div>
   )
+  if (requireRole && !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-950">
+        <Spin size="large" />
+      </div>
+    )
+  }
   if (requireRole && user && !requireRole.includes(user.role)) {
     message.error('无权访问该页面')
     return <Navigate to="/dashboard" replace />
