@@ -8,7 +8,8 @@ import {
 import {
   ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined,
   TeamOutlined, TrophyOutlined, AppstoreOutlined, HistoryOutlined,
-  InfoCircleOutlined
+  InfoCircleOutlined, PlayCircleOutlined, PauseCircleOutlined,
+  StopOutlined, ReloadOutlined
 } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { ColumnsType } from 'antd/es/table'
@@ -131,6 +132,26 @@ export default function GameDetail() {
       queryClient.invalidateQueries({ queryKey: ['game-challenges', gameId] })
     },
     onError: (err: any) => message.error(err.response?.data?.message || '删除失败'),
+  })
+
+  // 比赛操作 Mutation（开始/暂停/继续/结束/重置）
+  const actionMutation = useMutation({
+    mutationFn: ({ action, id }: { action: string; id: number }) => {
+      switch (action) {
+        case '开始': return gameApi.start(id)
+        case '暂停': return gameApi.pause(id)
+        case '继续': return gameApi.resume(id)
+        case '结束': return gameApi.stop(id)
+        case '重置': return gameApi.reset(id)
+        default: return Promise.resolve()
+      }
+    },
+    onSuccess: (_, v) => {
+      message.success(`${v.action}操作成功`)
+      queryClient.invalidateQueries({ queryKey: ['game', gameId] })
+      queryClient.invalidateQueries({ queryKey: ['games'] })
+    },
+    onError: (err: any) => message.error(err.response?.data?.message || '操作失败'),
   })
 
   // 过滤可选队伍（未添加到比赛的）
@@ -284,6 +305,38 @@ export default function GameDetail() {
           </div>
           <Text type="secondary">{game.description || '暂无描述'}</Text>
         </div>
+        <Space>
+          {game.status === 'draft' && (
+            <Popconfirm title="确定开始比赛？" description="比赛开始后将自动创建容器" onConfirm={() => actionMutation.mutate({ action: '开始', id: gameId })}>
+              <Button type="primary" icon={<PlayCircleOutlined />} loading={actionMutation.isPending}>开始</Button>
+            </Popconfirm>
+          )}
+          {game.status === 'running' && (
+            <>
+              <Popconfirm title="确定暂停比赛？" onConfirm={() => actionMutation.mutate({ action: '暂停', id: gameId })}>
+                <Button icon={<PauseCircleOutlined />} loading={actionMutation.isPending}>暂停</Button>
+              </Popconfirm>
+              <Popconfirm title="确定结束比赛？" description="结束后不可恢复，请谨慎操作！" onConfirm={() => actionMutation.mutate({ action: '结束', id: gameId })}>
+                <Button danger icon={<StopOutlined />} loading={actionMutation.isPending}>结束</Button>
+              </Popconfirm>
+            </>
+          )}
+          {game.status === 'paused' && (
+            <>
+              <Popconfirm title="确定继续比赛？" onConfirm={() => actionMutation.mutate({ action: '继续', id: gameId })}>
+                <Button type="primary" icon={<PlayCircleOutlined />} loading={actionMutation.isPending}>继续</Button>
+              </Popconfirm>
+              <Popconfirm title="确定结束比赛？" description="结束后不可恢复，请谨慎操作！" onConfirm={() => actionMutation.mutate({ action: '结束', id: gameId })}>
+                <Button danger icon={<StopOutlined />} loading={actionMutation.isPending}>结束</Button>
+              </Popconfirm>
+            </>
+          )}
+          {game.status === 'finished' && (
+            <Popconfirm title="确定重置？所有比赛数据将丢失！" onConfirm={() => actionMutation.mutate({ action: '重置', id: gameId })}>
+              <Button icon={<ReloadOutlined />} loading={actionMutation.isPending}>重置</Button>
+            </Popconfirm>
+          )}
+        </Space>
       </div>
 
       {/* 比赛状态卡片 */}
