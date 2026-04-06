@@ -18,6 +18,12 @@ func (s *TeamService) CreateTeam(ctx context.Context, name string) (*model.Team,
 		return nil, errors.New("database not initialized")
 	}
 
+	// Check for duplicate team name
+	var existing model.Team
+	if err := db.Where("name = ?", name).First(&existing).Error; err == nil {
+		return nil, errors.New("team name already exists")
+	}
+
 	token, err := crypto.GenerateToken()
 	if err != nil {
 		return nil, err

@@ -6,6 +6,7 @@ import (
 	"html"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/awd-platform/awd-arena/internal/database"
@@ -361,6 +362,9 @@ func (h *adminHandler) CreateTeam(c fiber.Ctx) error {
 
 	team, err := h.teamSvc.CreateTeam(c.Context(), req.Name)
 	if err != nil {
+		if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "UNIQUE") {
+			return c.Status(409).JSON(fiber.Map{"code": 409, "message": "队伍名已存在"})
+		}
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
