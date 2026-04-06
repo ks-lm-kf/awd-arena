@@ -8,7 +8,6 @@ require (
 	github.com/gofiber/fiber/v3 v3.0.0-beta.3
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/gorilla/websocket v1.5.3
-	github.com/jung-kurt/gofpdf v1.16.2
 	github.com/prometheus/client_golang v1.20.5
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.1

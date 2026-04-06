@@ -133,6 +133,9 @@ export interface TeamContainer {
   ip_address: string
   port_mapping: Record<string, number>
   status: ContainerStatus
+  ssh_user?: string
+  ssh_password?: string
+  ssh_port?: number
   created_at: string
 }
 

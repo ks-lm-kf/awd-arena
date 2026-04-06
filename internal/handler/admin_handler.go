@@ -119,6 +119,12 @@ func (h *adminHandler) CreateGame(c fiber.Ctx) error {
 	if req.Title == "" {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "title is required"})
 	}
+	if len(req.Title) > 100 {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "title must be at most 100 characters"})
+	}
+	if len(req.Title) < 2 {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "title must be at least 2 characters"})
+	}
 
 	userID, _ := c.Locals("user_id").(int64)
 	game := &model.Game{
@@ -253,6 +259,11 @@ func (h *adminHandler) StartGame(c fiber.Ctx) error {
 	}
 
 	if err := h.gameSvc.StartGame(c.Context(), id); err != nil {
+		// Propagate validation errors (state machine) as 400
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "cannot") {
+			return c.Status(400).JSON(fiber.Map{"code": 400, "message": errMsg})
+		}
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
@@ -273,6 +284,10 @@ func (h *adminHandler) PauseGame(c fiber.Ctx) error {
 	}
 
 	if err := h.gameSvc.PauseGame(c.Context(), id); err != nil {
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "cannot") {
+			return c.Status(400).JSON(fiber.Map{"code": 400, "message": errMsg})
+		}
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
@@ -293,6 +308,10 @@ func (h *adminHandler) ResumeGame(c fiber.Ctx) error {
 	}
 
 	if err := h.gameSvc.ResumeGame(c.Context(), id); err != nil {
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "cannot") {
+			return c.Status(400).JSON(fiber.Map{"code": 400, "message": errMsg})
+		}
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
@@ -313,6 +332,10 @@ func (h *adminHandler) StopGame(c fiber.Ctx) error {
 	}
 
 	if err := h.gameSvc.StopGame(c.Context(), id); err != nil {
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "cannot") {
+			return c.Status(400).JSON(fiber.Map{"code": 400, "message": errMsg})
+		}
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 
@@ -333,6 +356,10 @@ func (h *adminHandler) ResetGame(c fiber.Ctx) error {
 	}
 
 	if err := h.gameSvc.ResetGame(c.Context(), id); err != nil {
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "cannot") {
+			return c.Status(400).JSON(fiber.Map{"code": 400, "message": errMsg})
+		}
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
 

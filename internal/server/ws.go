@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/awd-platform/awd-arena/internal/config"
@@ -16,7 +17,29 @@ import (
 )
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin: func(r *http.Request) bool {
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true // allow non-browser clients (e.g. curl, ws cli)
+		}
+		// Allow same-origin and configured allowed origins
+		host := r.Host
+		if strings.HasPrefix(origin, "http://"+host) || strings.HasPrefix(origin, "https://"+host) {
+			return true
+		}
+		// Allow common localhost variants for development
+		for _, allowed := range []string{
+			"http://localhost:3000",
+			"http://localhost:8080",
+			"http://127.0.0.1:3000",
+			"http://127.0.0.1:8080",
+		} {
+			if origin == allowed {
+				return true
+			}
+		}
+		return false
+	},
 }
 
 // wsConn wraps a websocket connection with a write mutex for concurrent safety.

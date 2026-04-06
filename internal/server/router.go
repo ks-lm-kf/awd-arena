@@ -179,8 +179,8 @@ func RegisterRoutes(app *fiber.App) {
 	audit.Get("/logs", handler.AuditHandler.GetAuditLogs)
 	audit.Get("/stats", handler.AuditHandler.GetAuditStats)
 
-	// Export API
-	export := v1.Group("/games/:id/export", middleware.JWTAuth(), middleware.EnforcePasswordChange())
+	// Export API — restricted to admin/organizer (#39)
+	export := v1.Group("/games/:id/export", middleware.JWTAuth(), middleware.EnforcePasswordChange(), middleware.RequirePermission(model.PermViewAllData))
 	export.Get("/scoreboard/csv", handler.ExportHandler.ExportRankingCSV)
 	export.Get("/ranking/csv", handler.ExportHandler.ExportRankingCSV)
 	export.Get("/scoreboard/pdf", handler.ExportHandler.ExportRankingPDF)

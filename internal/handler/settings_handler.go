@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"strings"
+
 	"github.com/awd-platform/awd-arena/internal/database"
 	"github.com/gofiber/fiber/v3"
 	"gorm.io/gorm"
@@ -62,20 +64,44 @@ func (h *settingsHandler) UpdateSettings(c fiber.Ctx) error {
 	if req.SiteName == "" {
 		req.SiteName = "AWD Arena"
 	}
+	if len(req.SiteName) > 50 {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "site_name must be at most 50 characters"})
+	}
 	if req.AttackWeight <= 0 {
 		req.AttackWeight = 1.0
+	}
+	if req.AttackWeight > 10 {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "attack_weight must be at most 10"})
 	}
 	if req.DefenseWeight < 0 {
 		req.DefenseWeight = 0.5
 	}
+	if req.DefenseWeight > 10 {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "defense_weight must be at most 10"})
+	}
 	if req.MaxTeamSize < 1 {
 		req.MaxTeamSize = 5
 	}
-	if req.RoundDuration < 60 {
-		req.RoundDuration = 300
+	if req.MaxTeamSize > 20 {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "max_team_size must be at most 20"})
+	}
+	if req.RoundDuration < 30 {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "round_duration must be at least 30 seconds"})
+	}
+	if req.RoundDuration > 3600 {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "round_duration must be at most 3600 seconds (1 hour)"})
 	}
 	if req.BreakDuration < 0 {
 		req.BreakDuration = 60
+	}
+	if req.BreakDuration > 600 {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "break_duration must be at most 600 seconds"})
+	}
+	if req.FlagFormat == "" {
+		req.FlagFormat = "flag{%s}"
+	}
+	if !strings.Contains(req.FlagFormat, "%s") {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "flag_format must contain %s placeholder"})
 	}
 
 	db := database.GetDB()

@@ -1,31 +1,36 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router'
 import { ConfigProvider, theme, Spin, message } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query'
 import { MainLayout } from '@/components/Layout'
-import DashboardPage from '@/pages/Dashboard'
-import GameManagePage from '@/pages/GameManage'
-import RankingPage from '@/pages/Ranking'
-import TeamManagePage from '@/pages/TeamManage'
-import AttackPanelPage from '@/pages/AttackPanel'
-import DefensePanelPage from '@/pages/DefensePanel'
-import SettingsPage from '@/pages/Settings'
-import DockerImagesPage from '@/pages/DockerImages'
-import UserManagePage from '@/pages/UserManage'
-import LoginPage from '@/pages/Login'
-import RegisterPage from '@/pages/Register'
-import ProfilePage from '@/pages/Profile'
-import ChangePasswordPage from '@/pages/ChangePassword'
 import ErrorBoundary from '@/components/common/ErrorBoundary'
 import { useAuthStore } from '@/stores/authStore'
-// Admin pages for judges
-import AdminGameManagePage from '@/pages/admin/GameManage'
-import AdminTeamManagePage from '@/pages/admin/TeamManage'
-import ContainerManagePage from '@/pages/admin/ContainerManage'
-// New pages
-import AuditPage from '@/pages/Audit'
-import GameDetailPage from '@/pages/GameDetail'
+
+const LoadingFallback = () => (
+  <div className="min-h-screen flex items-center justify-center bg-gray-950">
+    <Spin size="large" />
+  </div>
+)
+
+const DashboardPage = lazy(() => import('@/pages/Dashboard'))
+const GameManagePage = lazy(() => import('@/pages/GameManage'))
+const RankingPage = lazy(() => import('@/pages/Ranking'))
+const TeamManagePage = lazy(() => import('@/pages/TeamManage'))
+const AttackPanelPage = lazy(() => import('@/pages/AttackPanel'))
+const DefensePanelPage = lazy(() => import('@/pages/DefensePanel'))
+const SettingsPage = lazy(() => import('@/pages/Settings'))
+const DockerImagesPage = lazy(() => import('@/pages/DockerImages'))
+const UserManagePage = lazy(() => import('@/pages/UserManage'))
+const LoginPage = lazy(() => import('@/pages/Login'))
+const RegisterPage = lazy(() => import('@/pages/Register'))
+const ProfilePage = lazy(() => import('@/pages/Profile'))
+const ChangePasswordPage = lazy(() => import('@/pages/ChangePassword'))
+const AdminGameManagePage = lazy(() => import('@/pages/admin/GameManage'))
+const AdminTeamManagePage = lazy(() => import('@/pages/admin/TeamManage'))
+const ContainerManagePage = lazy(() => import('@/pages/admin/ContainerManage'))
+const AuditPage = lazy(() => import('@/pages/Audit'))
+const GameDetailPage = lazy(() => import('@/pages/GameDetail'))
 // @ts-ignore
 import '@/styles/index.css'
 
@@ -101,7 +106,8 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <ErrorBoundary>
           <BrowserRouter>
-            <Routes>
+            <Suspense fallback={<LoadingFallback />}>
+              <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/change-password" element={<ChangePasswordPage />} />
@@ -171,7 +177,8 @@ function App() {
                 } />
               </Route>
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
-            </Routes>
+              </Routes>
+            </Suspense>
           </BrowserRouter>
         </ErrorBoundary>
       </QueryClientProvider>

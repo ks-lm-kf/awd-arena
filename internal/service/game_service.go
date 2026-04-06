@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/awd-platform/awd-arena/internal/database"
@@ -11,13 +12,27 @@ import (
 	"github.com/awd-platform/awd-arena/pkg/logger"
 )
 
-// EngineCallbacks holds callbacks to start/stop/pause/resume the competition engine
-// This avoids cyclic dependency between service and engine packages
 var EngineCallbacks struct {
 	StartGame  func(game *model.Game) error
 	PauseGame  func(gameID int64) error
 	ResumeGame func(game *model.Game) error
 	StopGame   func(gameID int64) error
+}
+
+var gameMutexes = struct {
+	sync.RWMutex
+	m map[int64]*sync.Mutex
+}{m: make(map[int64]*sync.Mutex)}
+
+func getGameMutex(gameID int64) *sync.Mutex {
+	gameMutexes.Lock()
+	defer gameMutexes.Unlock()
+	mu, ok := gameMutexes.m[gameID]
+	if !ok {
+		mu = &sync.Mutex{}
+		gameMutexes.m[gameID] = mu
+	}
+	return mu
 }
 
 // GameService handles game management logic.
@@ -43,6 +58,10 @@ func (s *GameService) UpdateGame(ctx context.Context, game *model.Game) error {
 
 // StartGame starts a game and provisions containers.
 func (s *GameService) StartGame(ctx context.Context, gameID int64) error {
+	mu := getGameMutex(gameID)
+	mu.Lock()
+	defer mu.Unlock()
+
 	db := database.GetDB()
 	if db == nil {
 		return errors.New("database not initialized")
@@ -52,6 +71,11 @@ func (s *GameService) StartGame(ctx context.Context, gameID int64) error {
 	var game model.Game
 	if err := db.First(&game, gameID).Error; err != nil {
 		return errors.New("game not found")
+	}
+
+	// State machine validation: only draft → running is allowed
+	if !game.CanStart() {
+		return fmt.Errorf("cannot start game in %q status, must be in draft", game.Status)
 	}
 
 	now := time.Now()
@@ -95,10 +119,24 @@ func (s *GameService) StartGame(ctx context.Context, gameID int64) error {
 
 // PauseGame pauses a game and pauses all containers.
 func (s *GameService) PauseGame(ctx context.Context, gameID int64) error {
+	mu := getGameMutex(gameID)
+	mu.Lock()
+	defer mu.Unlock()
+
 	db := database.GetDB()
 	if db == nil {
 		return errors.New("database not initialized")
 	}
+
+	// State machine validation: only running → paused is allowed
+	var game model.Game
+	if err := db.First(&game, gameID).Error; err != nil {
+		return errors.New("game not found")
+	}
+	if !game.CanPause() {
+		return fmt.Errorf("cannot pause game in %q status", game.Status)
+	}
+
 	if err := db.Model(&model.Game{}).Where("id = ?", gameID).Updates(map[string]interface{}{
 		"status":        "paused",
 		"current_phase": "break",
@@ -126,6 +164,10 @@ func (s *GameService) PauseGame(ctx context.Context, gameID int64) error {
 
 // ResumeGame resumes a paused game and unpauses containers.
 func (s *GameService) ResumeGame(ctx context.Context, gameID int64) error {
+	mu := getGameMutex(gameID)
+	mu.Lock()
+	defer mu.Unlock()
+
 	db := database.GetDB()
 	if db == nil {
 		return errors.New("database not initialized")
@@ -135,6 +177,11 @@ func (s *GameService) ResumeGame(ctx context.Context, gameID int64) error {
 	var game model.Game
 	if err := db.First(&game, gameID).Error; err != nil {
 		return errors.New("game not found")
+	}
+
+	// State machine validation: only paused → running is allowed
+	if !game.CanResume() {
+		return fmt.Errorf("cannot resume game in %q status, must be paused", game.Status)
 	}
 
 	if err := db.Model(&model.Game{}).Where("id = ?", gameID).Updates(map[string]interface{}{
@@ -166,10 +213,24 @@ func (s *GameService) ResumeGame(ctx context.Context, gameID int64) error {
 
 // StopGame stops a game and tears down all containers.
 func (s *GameService) StopGame(ctx context.Context, gameID int64) error {
+	mu := getGameMutex(gameID)
+	mu.Lock()
+	defer mu.Unlock()
+
 	db := database.GetDB()
 	if db == nil {
 		return errors.New("database not initialized")
 	}
+
+	// State machine validation: only running/paused → finished is allowed
+	var game model.Game
+	if err := db.First(&game, gameID).Error; err != nil {
+		return errors.New("game not found")
+	}
+	if !game.CanFinish() {
+		return fmt.Errorf("cannot stop game in %q status", game.Status)
+	}
+
 	now := time.Now()
 	if err := db.Model(&model.Game{}).Where("id = ?", gameID).Updates(map[string]interface{}{
 		"status":        "finished",
@@ -199,9 +260,22 @@ func (s *GameService) StopGame(ctx context.Context, gameID int64) error {
 
 // ResetGame resets a game and cleans up containers and scoring data.
 func (s *GameService) ResetGame(ctx context.Context, gameID int64) error {
+	mu := getGameMutex(gameID)
+	mu.Lock()
+	defer mu.Unlock()
+
 	db := database.GetDB()
 	if db == nil {
 		return errors.New("database not initialized")
+	}
+
+	// State machine validation: only finished/stopped → draft is allowed
+	var game model.Game
+	if err := db.First(&game, gameID).Error; err != nil {
+		return errors.New("game not found")
+	}
+	if game.Status != model.GameStatusFinished && game.Status != model.GameStatusDraft {
+		return fmt.Errorf("cannot reset game in %q status, must be finished or draft", game.Status)
 	}
 
 	// Cleanup containers first

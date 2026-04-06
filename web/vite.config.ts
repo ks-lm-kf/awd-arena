@@ -23,4 +23,16 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router'],
+          'vendor-antd': ['antd', '@ant-design/icons'],
+          'vendor-query': ['@tanstack/react-query', 'zustand'],
+          'vendor-charts': ['echarts', 'echarts-for-react', 'recharts'],
+        },
+      },
+    },
+  },
 })

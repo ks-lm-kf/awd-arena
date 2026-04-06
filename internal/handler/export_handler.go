@@ -15,6 +15,14 @@ var ExportHandler = &exportHandler{}
 
 type exportHandler struct{}
 
+// csvSafe prevents CSV formula injection by escaping dangerous prefixes.
+func csvSafe(s string) string {
+	if len(s) > 0 && (s[0] == '=' || s[0] == '+' || s[0] == '-' || s[0] == '@') {
+		return "\t" + s
+	}
+	return s
+}
+
 // ExportRankingCSV exports rankings as CSV
 // GET /api/v1/games/:id/export/ranking/csv
 func (h *exportHandler) ExportRankingCSV(c fiber.Ctx) error {
@@ -42,7 +50,7 @@ func (h *exportHandler) ExportRankingCSV(c fiber.Ctx) error {
 	for _, s := range roundScores {
 		writer.Write([]string{
 			fmt.Sprintf("%d", s.Rank),
-			teamMap[s.TeamID],
+			csvSafe(teamMap[s.TeamID]),
 			fmt.Sprintf("%.2f", s.TotalScore),
 			fmt.Sprintf("%.2f", s.AttackScore),
 			fmt.Sprintf("%.2f", s.DefenseScore),

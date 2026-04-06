@@ -356,6 +356,12 @@ func (h *gameHandler) Create(c fiber.Ctx) error {
 	if req.Title == "" {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "title is required"})
 	}
+	if len(req.Title) > 100 {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "title must be at most 100 characters"})
+	}
+	if len(req.Title) < 2 {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "title must be at least 2 characters"})
+	}
 
 	// XSS Protection: Validate and sanitize title
 	sanitizedTitle, err := validateAndSanitizeInput(req.Title, "title")
@@ -785,6 +791,21 @@ func (h *flagHandler) History(c fiber.Ctx) error {
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 	}
+
+	// Ownership control (#42): players only see their own team's submissions
+	_, _, role, teamID := middleware.GetCurrentUser(c)
+	if role != model.RoleAdmin && role != model.RoleOrganizer {
+		// Player: only see their own team's submissions
+		if teamID == nil {
+			return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": []interface{}{}})
+		}
+		history, err := h.svc.GetFlagHistoryByTeam(c.Context(), id, round, *teamID)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
+		}
+		return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": history})
+	}
+
 	history, err := h.svc.GetFlagHistory(c.Context(), id, round)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
@@ -1118,6 +1139,28 @@ func (h *userHandler) Delete(c fiber.Ctx) error {
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 	}
+
+	userID, _ := c.Locals("user_id").(int64)
+	if userID == id {
+		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "cannot delete your own account"})
+	}
+
+	// #37: verify user exists before deleting to return proper 404
+	db := database.GetDB()
+	var existing model.User
+	if err := db.First(&existing, id).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "user not found"})
+	}
+
+	// Ensure at least one admin remains after deletion (#36 extended)
+	if existing.Role == "admin" {
+		var adminCount int64
+		db.Model(&model.User{}).Where("role = ? AND id != ?", "admin", id).Count(&adminCount)
+		if adminCount == 0 {
+			return c.Status(400).JSON(fiber.Map{"code": 400, "message": "cannot delete the last admin account"})
+		}
+	}
+
 	if err := h.svc.DeleteUser(c.Context(), id); err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}

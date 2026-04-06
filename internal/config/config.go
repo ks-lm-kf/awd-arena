@@ -74,6 +74,16 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("JWT secret must be at least 32 characters long")
 	}
 
+	defaultSecrets := map[string]bool{
+		"CHANGE_ME_TO_A_STRONG_RANDOM_SECRET": true,
+		"dev-secret-change-me":                true,
+		"your-strong-random-secret-here":      true,
+		"secret":                              true,
+	}
+	if defaultSecrets[C.Server.JWTSecret] {
+		return nil, fmt.Errorf("ERROR: JWT secret is still the default value (%q). Set a strong random secret in config.yaml or JWT_SECRET env var", C.Server.JWTSecret)
+	}
+
 	return &C, nil
 }
 

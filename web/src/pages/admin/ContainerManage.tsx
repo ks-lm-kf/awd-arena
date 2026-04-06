@@ -3,30 +3,16 @@ import { Card, Table, Typography, Tag, Space, Button, message, Spin, Empty, Sele
 import { ContainerOutlined, ReloadOutlined, EyeOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { ColumnsType } from 'antd/es/table'
+import type { TeamContainer } from '@/types'
 import { containerApi } from '@/api/container'
 import { gameApi } from '@/api/game'
 import { statusLabel, statusColor, formatTime } from '@/utils/format'
 
 const { Title, Text } = Typography
 
-interface ContainerInfo {
-  id: number
-  team_id: number
-  team_name?: string
-  challenge_id: number
-  challenge_name?: string
-  container_id: string
-  ip_address: string
-  port_mapping: Record<string, number>
-  status: string
-  ssh_user?: string
-  ssh_password?: string
-  ssh_port?: number
-}
-
 export default function ContainerManage() {
   const [selectedGameId, setSelectedGameId] = useState<number | null>(null)
-  const [detailContainer, setDetailContainer] = useState<ContainerInfo | null>(null)
+  const [detailContainer, setDetailContainer] = useState<TeamContainer | null>(null)
   const queryClient = useQueryClient()
 
   const { data: games, isLoading: gamesLoading } = useQuery({
@@ -61,18 +47,18 @@ export default function ContainerManage() {
   const selectedGame = games?.find((g: any) => g.id === selectedGameId)
   const isGameFinished = selectedGame?.status === 'finished'
 
-  const columns: ColumnsType<ContainerInfo> = [
+  const columns: ColumnsType<TeamContainer> = [
     {
       title: '队伍',
       dataIndex: 'team_name',
       width: 120,
-      render: (name: string, r: ContainerInfo) => <Text strong>{name || `队伍 #${r.team_id}`}</Text>
+      render: (name: string, r: TeamContainer) => <Text strong>{name || `队伍 #${r.team_id}`}</Text>
     },
     {
       title: '题目',
       dataIndex: 'challenge_name',
       width: 150,
-      render: (name: string, r: ContainerInfo) => <Text>{name || `题目 #${r.challenge_id}`}</Text>
+      render: (name: string, r: TeamContainer) => <Text>{name || `题目 #${r.challenge_id}`}</Text>
     },
     {
       title: '容器状态',
@@ -102,7 +88,7 @@ export default function ContainerManage() {
     {
       title: '操作',
       width: 160,
-      render: (_: any, r: ContainerInfo) => (
+      render: (_: any, r: TeamContainer) => (
         <Space size="small">
           <Popconfirm title="确认重启该容器？" description="重启将扣除50分" onConfirm={() => restartOneMutation.mutate(r.id)}>
             <Button size="small" icon={<ReloadOutlined />} loading={restartOneMutation.isPending}>重启</Button>

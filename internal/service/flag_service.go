@@ -101,7 +101,7 @@ func (s *FlagService) SubmitFlag(ctx context.Context, gameID, round, attackerTea
 			AttackerTeam: attackerTeam,
 			TargetTeam:   0,
 			FlagHash:     flagHash,
-			FlagValue:    flagValue,
+			FlagValue:    "", // #51: never store plaintext flag
 			IsCorrect:    false,
 			PointsEarned: 0,
 			SubmittedAt:  time.Now(),
@@ -124,7 +124,7 @@ func (s *FlagService) SubmitFlag(ctx context.Context, gameID, round, attackerTea
 		AttackerTeam: attackerTeam,
 		TargetTeam:   flagRecord.TeamID,
 		FlagHash:     flagHash,
-		FlagValue:    flagValue,
+		FlagValue:    "", // #51: never store plaintext flag
 		IsCorrect:    true,
 		PointsEarned: points,
 		SubmittedAt:  time.Now(),
@@ -171,15 +171,44 @@ func (s *FlagService) GetFlagHistory(ctx context.Context, gameID int64, round in
 
 	items := make([]FlagHistoryItem, len(submissions))
 	for i, sub := range submissions {
-		maskedFlag := "***"
-		if len(sub.FlagValue) > 8 {
-			maskedFlag = sub.FlagValue[:8] + "..."
-		}
 		items[i] = FlagHistoryItem{
 			ID:           sub.ID,
 			AttackerTeam: sub.AttackerTeam,
 			TargetTeam:   sub.TargetTeam,
-			FlagValue:    maskedFlag,
+			FlagValue:    "***",
+			IsCorrect:    sub.IsCorrect,
+			PointsEarned: sub.PointsEarned,
+			Round:        sub.Round,
+			SubmittedAt:  sub.SubmittedAt,
+		}
+	}
+	return items, nil
+}
+
+// GetFlagHistoryByTeam returns flag history filtered to a specific team (for player ownership).
+func (s *FlagService) GetFlagHistoryByTeam(ctx context.Context, gameID int64, round int, teamID int64) ([]FlagHistoryItem, error) {
+	db := database.GetDB()
+	if db == nil {
+		return nil, errors.New("database not initialized")
+	}
+
+	query := db.Model(&model.FlagSubmission{}).Where("game_id = ? AND attacker_team = ?", gameID, teamID)
+	if round > 0 {
+		query = query.Where("round = ?", round)
+	}
+
+	var submissions []model.FlagSubmission
+	if err := query.Order("submitted_at desc").Find(&submissions).Error; err != nil {
+		return nil, err
+	}
+
+	items := make([]FlagHistoryItem, len(submissions))
+	for i, sub := range submissions {
+		items[i] = FlagHistoryItem{
+			ID:           sub.ID,
+			AttackerTeam: sub.AttackerTeam,
+			TargetTeam:   sub.TargetTeam,
+			FlagValue:    "***",
 			IsCorrect:    sub.IsCorrect,
 			PointsEarned: sub.PointsEarned,
 			Round:        sub.Round,

@@ -1,24 +1,7 @@
-import { get, post, del } from './client'
+import { get, post } from './client'
 import type { TeamContainer } from '@/types'
 
-export interface Container {
-  id: number
-  name: string
-  status: string
-  image: string
-  ports: string
-  created_at: string
-  team_id: number
-  challenge_id: number
-  challenge_name?: string
-  ip_address?: string
-  port_mapping?: Record<string, number>
-  container_id?: string
-  // SSH info fields
-  ssh_user?: string
-  ssh_password?: string
-  ssh_port?: number
-}
+export type Container = TeamContainer
 
 export interface ContainerListResponse {
   items: Container[]
@@ -28,11 +11,11 @@ export interface ContainerListResponse {
 export const containerApi = {
   // List containers for a specific game (admin view all)
   list: (gameId: number) =>
-    get<Container[]>(`/games/${gameId}/containers`),
+    get<TeamContainer[]>(`/games/${gameId}/containers`),
 
   // Get containers for current user's team
   getMyContainers: (gameId: number) =>
-    get<Container[]>(`/games/${gameId}/my-machines`),
+    get<TeamContainer[]>(`/games/${gameId}/my-machines`),
 
   // Get my machines for attack panel (player view)
   getMyMachines: (gameId: number) =>
@@ -40,7 +23,7 @@ export const containerApi = {
 
   // Get container detail
   getContainerDetail: (containerId: number) =>
-    get<Container>(`/containers/${containerId}`),
+    get<TeamContainer>(`/containers/${containerId}`),
 
   // Restart a single container
   restartOne: (gameId: number, containerId: number) =>
