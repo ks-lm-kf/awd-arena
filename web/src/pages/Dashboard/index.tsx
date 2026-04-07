@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Card, Row, Col, Statistic, Tag, Typography, Button, Table, Progress, Space, Tooltip, message, Popconfirm } from 'antd'
+import { Card, Row, Col, Statistic, Tag, Typography, Button, Table, Progress, Space, message, Popconfirm } from 'antd'
 import {
   PlayCircleOutlined, PauseCircleOutlined, StopOutlined,
   TrophyOutlined, ThunderboltOutlined, TeamOutlined,
@@ -173,7 +173,7 @@ export default function DashboardPage() {
               { title: '总得分', dataIndex: 'total_score', render: (v: number) => <span className="font-bold">{v}</span>, sorter: (a: any, b: any) => a.total_score - b.total_score },
               { title: '攻击', dataIndex: 'attack_score', render: (v: number) => <span className="text-red-400">{v}</span> },
               { title: '防御', dataIndex: 'defense_score', render: (v: number) => <span className="text-green-400">{v}</span> },
-              { title: 'Flag', dataIndex: 'flag_count' },
+              { title: '首杀', dataIndex: 'first_bloods' },
             ]}
           />
         </Card>

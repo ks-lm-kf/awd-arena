@@ -3,6 +3,7 @@ import { Form, Input, Button, Card, message } from 'antd'
 import { LockOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router'
 import { authApi } from '@/api/auth'
+import { useAuthStore } from '@/stores/authStore'
 
 export default function ChangePasswordPage() {
   const [loading, setLoading] = useState(false)
@@ -23,6 +24,7 @@ export default function ChangePasswordPage() {
       message.success('Password changed successfully')
       localStorage.removeItem('token')
       localStorage.removeItem('user')
+      useAuthStore.getState().logout()
       navigate('/login')
     } catch (error: any) {
       message.error(error.response?.data?.message || 'Failed to change password')

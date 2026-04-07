@@ -43,7 +43,9 @@ func (sc *ScoreCalculator) CalculateRoundScores(ctx context.Context, round int) 
 
 	// Get correct submissions for this round
 	var subs []model.FlagSubmission
-	db.Where("game_id = ? AND round = ? AND is_correct = ?", sc.game.ID, round, true).Find(&subs)
+	if err := db.Where("game_id = ? AND round = ? AND is_correct = ?", sc.game.ID, round, true).Find(&subs).Error; err != nil {
+		logger.Error("failed to query correct flag submissions", "game_id", sc.game.ID, "round", round, "error", err)
+	}
 
 	// Calculate attack scores per team
 	attackScores := make(map[int64]float64)
@@ -76,13 +78,17 @@ func (sc *ScoreCalculator) CalculateRoundScores(ctx context.Context, round int) 
 		var existing model.RoundScore
 		err := db.Where("game_id = ? AND round = ? AND team_id = ?", sc.game.ID, round, team.ID).First(&existing).Error
 		if err != nil {
-			db.Create(&roundScore)
+			if err := db.Create(&roundScore).Error; err != nil {
+				logger.Error("failed to create round score", "game_id", sc.game.ID, "round", round, "team_id", team.ID, "error", err)
+			}
 		} else {
-			db.Model(&existing).Updates(map[string]interface{}{
+			if err := db.Model(&existing).Updates(map[string]interface{}{
 				"attack_score":  attack,
 				"defense_score": defense,
 				"total_score":   total,
-			})
+			}).Error; err != nil {
+				logger.Error("failed to update round score", "game_id", sc.game.ID, "round", round, "team_id", team.ID, "error", err)
+			}
 		}
 	}
 
@@ -102,11 +108,13 @@ func (sc *ScoreCalculator) UpdateCumulativeTeamScores(ctx context.Context) error
 		TotalScore float64
 	}
 	var totals []TeamTotal
-	db.Model(&model.RoundScore{}).
+	if err := db.Model(&model.RoundScore{}).
 		Select("team_id, SUM(total_score) as total_score").
 		Where("game_id = ?", sc.game.ID).
 		Group("team_id").
-		Find(&totals)
+		Find(&totals).Error; err != nil {
+		logger.Error("failed to query cumulative team scores", "game_id", sc.game.ID, "error", err)
+	}
 
 	// Add score adjustments
 	type AdjTotal struct {
@@ -114,11 +122,13 @@ func (sc *ScoreCalculator) UpdateCumulativeTeamScores(ctx context.Context) error
 		AdjTotal int
 	}
 	var adjTotals []AdjTotal
-	db.Model(&model.ScoreAdjustment{}).
+	if err := db.Model(&model.ScoreAdjustment{}).
 		Select("team_id, SUM(adjust_value) as adj_total").
 		Where("game_id = ?", sc.game.ID).
 		Group("team_id").
-		Find(&adjTotals)
+		Find(&adjTotals).Error; err != nil {
+		logger.Error("failed to query score adjustments", "game_id", sc.game.ID, "error", err)
+	}
 
 	adjMap := make(map[int64]int)
 	for _, a := range adjTotals {
@@ -128,7 +138,9 @@ func (sc *ScoreCalculator) UpdateCumulativeTeamScores(ctx context.Context) error
 	// Update each team's cumulative score
 	for _, t := range totals {
 		cumulative := t.TotalScore + float64(adjMap[t.TeamID])
-		db.Model(&model.Team{}).Where("id = ?", t.TeamID).Update("score", cumulative)
+		if err := db.Model(&model.Team{}).Where("id = ?", t.TeamID).Update("score", cumulative).Error; err != nil {
+			logger.Error("failed to update team cumulative score", "team_id", t.TeamID, "score", cumulative, "error", err)
+		}
 	}
 
 	return sc.UpdateRankings(ctx, 0)
@@ -169,19 +181,23 @@ func (sc *ScoreCalculator) UpdateRankings(ctx context.Context, round int) error 
 		TotalScore float64
 	}
 	var totals []TeamTotal
-	db.Model(&model.RoundScore{}).
+	if err := db.Model(&model.RoundScore{}).
 		Select("team_id, SUM(total_score) as total_score").
 		Where("game_id = ?", sc.game.ID).
 		Group("team_id").
 		Order("total_score desc").
-		Find(&totals)
+		Find(&totals).Error; err != nil {
+		logger.Error("failed to query scores for ranking", "game_id", sc.game.ID, "error", err)
+	}
 
 	// Update each team's rank based on cumulative score
 	for i, t := range totals {
 		rank := i + 1
 		var latestScore model.RoundScore
 		if err := db.Where("game_id = ? AND team_id = ?", sc.game.ID, t.TeamID).Order("round desc").First(&latestScore).Error; err == nil {
-			db.Model(&latestScore).Update("rank", rank)
+			if err := db.Model(&latestScore).Update("rank", rank).Error; err != nil {
+				logger.Error("failed to update team rank", "team_id", t.TeamID, "rank", rank, "error", err)
+			}
 		}
 	}
 

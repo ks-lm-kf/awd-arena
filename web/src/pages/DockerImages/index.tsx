@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   Card, Table, Button, Space, Modal, Form, Input, Select, InputNumber, Tag,
   Typography, message, Popconfirm, Tooltip, Drawer, Spin, Empty, Row, Col,
-  Tabs, Alert, Progress
+  Tabs, Alert
 } from 'antd'
 import { 
   PlusOutlined, EditOutlined, DeleteOutlined, CloudDownloadOutlined, 
@@ -17,9 +17,8 @@ import {
 } from '@/api/dockerImage'
 import { formatBytes, difficultyColor, difficultyLabel } from '@/utils/format'
 
-const { Title, Text, Paragraph } = Typography
+const { Title, Text } = Typography
 const { Option } = Select
-const { TabPane } = Tabs
 
 export default function DockerImages() {
   const queryClient = useQueryClient()
@@ -394,7 +393,6 @@ export default function DockerImages() {
           <Form.Item 
             name="no_cache" 
             label="禁用缓存"
-            valuePropName="checked"
           >
             <Select options={[
               { value: false, label: '使用缓存（推荐）' },

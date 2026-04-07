@@ -12,12 +12,18 @@ import (
 // Bus provides event publishing and subscribing with real handler dispatch and WebSocket broadcast.
 type Bus struct {
 	mu            sync.RWMutex
+	closed        bool
 	subscriptions map[string][]func(interface{})
 }
 
 // Publish publishes an event to all subscribers of the subject and broadcasts via WebSocket.
 func (b *Bus) Publish(ctx context.Context, subject string, data interface{}) error {
 	b.mu.RLock()
+	if b.closed {
+		b.mu.RUnlock()
+		logger.Warn("eventbus publish on closed bus", "subject", subject)
+		return nil
+	}
 	handlers := make([]func(interface{}), len(b.subscriptions[subject]))
 	copy(handlers, b.subscriptions[subject])
 	b.mu.RUnlock()
@@ -79,6 +85,7 @@ func (b *Bus) SubscribeSimple(subject string, handler func(interface{})) {
 func (b *Bus) Close() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.closed = true
 	b.subscriptions = nil
 	return nil
 }

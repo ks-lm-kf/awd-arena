@@ -160,8 +160,6 @@ func (rs *RoundScheduler) Run(ctx context.Context) {
 		}
 		rs.engine.mu.Unlock()
 
-		rs.broadcastRoundEnd(currentRound)
-
 		rs.engine.mu.Lock()
 		currentRound = rs.engine.currentRound
 		totalRounds := rs.engine.totalRounds
@@ -172,7 +170,6 @@ func (rs *RoundScheduler) Run(ctx context.Context) {
 			rs.engine.currentPhase = "finished"
 			rs.engine.mu.Unlock()
 			logger.Info("game finished", "rounds", totalRounds)
-			rs.broadcastGameFinished()
 
 			rs.engine.finishGame(ctx)
 			return
@@ -243,13 +240,10 @@ func (rs *RoundScheduler) Run(ctx context.Context) {
 		}
 		rs.engine.mu.Unlock()
 
-		rs.broadcastRoundStart(nextRound)
-
 		rs.engine.mu.Lock()
 		roundDuration = rs.engine.roundDuration
 		rs.engine.mu.Unlock()
 
-		// Reset remaining round time for new round
 		rs.mu.Lock()
 		rs.remainingRoundTime = roundDuration
 		rs.mu.Unlock()

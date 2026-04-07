@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"strconv"
 
 	"github.com/awd-platform/awd-arena/internal/container"
@@ -20,7 +21,8 @@ func (h *DockerImageHandler) RemoveFromHost(c fiber.Ctx) error {
 
 	err := h.svc.RemoveImageFromHost(c.Context(), imageIDorName, force)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		log.Printf("failed to remove image from host: %v", err)
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "failed to remove image from host"})
 	}
 
 	return c.JSON(fiber.Map{"code": 0, "message": "image removed from host"})
@@ -38,7 +40,8 @@ func (h *DockerImageHandler) RemoveFromDBAndHost(c fiber.Ctx) error {
 
 	err = h.svc.RemoveImageFromDBAndHost(c.Context(), uint(id), force)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		log.Printf("failed to remove image: %v", err)
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "failed to remove image"})
 	}
 
 	return c.JSON(fiber.Map{"code": 0, "message": "image removed completely"})
@@ -60,7 +63,8 @@ func (h *DockerImageHandler) PullImage(c fiber.Ctx) error {
 
 	output, err := h.svc.ImportDockerImage(c.Context(), req.Name, req.Tag)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		log.Printf("failed to pull image: %v", err)
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "failed to pull image"})
 	}
 
 	return c.JSON(fiber.Map{"code": 0, "message": "image pulled successfully", "data": fiber.Map{"output": output}})
@@ -70,7 +74,7 @@ func (h *DockerImageHandler) PullImage(c fiber.Ctx) error {
 // Pushes an image to registry
 func (h *DockerImageHandler) PushImage(c fiber.Ctx) error {
 	var req struct {
-		ImageRef  string             `json:"image_ref"`
+		ImageRef   string              `json:"image_ref"`
 		AuthConfig registry.AuthConfig `json:"auth_config"`
 	}
 	if err := c.Bind().Body(&req); err != nil {
@@ -82,7 +86,8 @@ func (h *DockerImageHandler) PushImage(c fiber.Ctx) error {
 
 	err := h.svc.PushImageToRegistry(c.Context(), req.ImageRef, req.AuthConfig)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		log.Printf("failed to push image: %v", err)
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "failed to push image"})
 	}
 
 	return c.JSON(fiber.Map{"code": 0, "message": "image pushed successfully"})
@@ -121,7 +126,8 @@ func (h *DockerImageHandler) BuildImage(c fiber.Ctx) error {
 
 	imageID, err := h.svc.BuildImageFromDockerfile(c.Context(), opts)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		log.Printf("failed to build image: %v", err)
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "failed to build image"})
 	}
 
 	return c.JSON(fiber.Map{
@@ -143,7 +149,8 @@ func (h *DockerImageHandler) GetImageDetails(c fiber.Ctx) error {
 
 	details, err := h.svc.GetImageDetailsFromHost(c.Context(), imageID)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		log.Printf("failed to get image details: %v", err)
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "failed to get image details"})
 	}
 
 	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": details})

@@ -21,10 +21,6 @@ export const containerApi = {
   getMyMachines: (gameId: number) =>
     get<TeamContainer[]>(`/games/${gameId}/my-machines`),
 
-  // Get container detail
-  getContainerDetail: (containerId: number) =>
-    get<TeamContainer>(`/containers/${containerId}`),
-
   // Restart a single container
   restartOne: (gameId: number, containerId: number) =>
     post<void>(`/games/${gameId}/containers/${containerId}/restart`),
@@ -56,6 +52,7 @@ export function getMyContainers(gameId: number) {
 }
 
 export function getContainerDetail(containerId: number) {
-  return containerApi.getContainerDetail(containerId)
+  console.warn('getContainerDetail: no backend route exists for /containers/:id')
+  return Promise.reject(new Error('Endpoint not implemented'))
 }
 

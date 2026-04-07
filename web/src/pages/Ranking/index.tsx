@@ -60,7 +60,7 @@ export default function RankingPage() {
             <>
               <Text>轮次：</Text>
               <Select style={{ width: 120 }} placeholder="最新" value={selectedRound} onChange={setSelectedRound} allowClear
-                options={[{ value: undefined as any, label: '最新' }, ...rounds.map((r) => ({ value: r, label: `第 ${r} 轮` }))]} />
+                options={[...rounds.map((r) => ({ value: r, label: `第 ${r} 轮` }))]} />
             </>
           )}
         </Space>

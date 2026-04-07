@@ -66,7 +66,10 @@ func (s *FlagService) GenerateFlags(ctx context.Context, gameID int64, round int
 	for _, team := range teams {
 		flagValues[team.ID] = make(map[int64]string)
 		for _, ch := range challenges {
-			randomHex, _ := crypto.GenerateRandomHex(16)
+			randomHex, err := crypto.GenerateRandomHex(16)
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate random flag: %w", err)
+			}
 			flagValue := fmt.Sprintf("flag{%d_%d_%d_%d_%s}", gameID, round, team.ID, ch.ID, randomHex)
 			record := model.FlagRecord{
 				GameID:   gameID,

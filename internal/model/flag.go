@@ -7,7 +7,7 @@ type FlagRecord struct {
 	GameID    int64     `json:"game_id" gorm:"index:idx_game_round_team"`
 	Round     int       `json:"round" gorm:"index:idx_game_round_team"`
 	TeamID    int64     `json:"team_id" gorm:"index:idx_game_round_team"`
-	FlagHash  string    `json:"flag_hash"`
+	FlagHash  string    `json:"flag_hash" gorm:"index"`
 	Service   string    `json:"service"`
 	CreatedAt time.Time `json:"created_at"`
 }

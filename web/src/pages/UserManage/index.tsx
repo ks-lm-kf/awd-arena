@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   Card, Table, Button, Space, Modal, Form, Input, Select, Typography, Tag, message, Popconfirm, Spin, Tooltip,
 } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, KeyOutlined, StopOutlined, CheckCircleOutlined, SearchOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { ColumnsType } from 'antd/es/table'
 import { userApi, type CreateUserRequest, type UpdateUserRequest } from '@/api/user'
@@ -44,18 +44,6 @@ export default function UserManage() {
     onError: (err: any) => message.error(err.response?.data?.message || '删除失败'),
   })
 
-  const resetPwdMutation = useMutation({
-    mutationFn: (id: number) => userApi.resetPassword(id),
-    onSuccess: () => message.success('密码已重置'),
-    onError: (err: any) => message.error(err.response?.data?.message || '重置失败'),
-  })
-
-  const toggleMutation = useMutation({
-    mutationFn: (id: number) => userApi.toggleStatus(id),
-    onSuccess: () => { message.success('状态已更新'); queryClient.invalidateQueries({ queryKey: ['users'] }) },
-    onError: (err: any) => message.error(err.response?.data?.message || '操作失败'),
-  })
-
   const closeModal = () => { setModalOpen(false); setEditing(null); form.resetFields() }
 
   const openEdit = (record: User) => {
@@ -76,13 +64,6 @@ export default function UserManage() {
       render: (_, r) => (
         <Space size="small">
           <Tooltip title="编辑"><Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)} /></Tooltip>
-          <Tooltip title="重置密码"><Popconfirm title="确定重置密码？" onConfirm={() => resetPwdMutation.mutate(r.id)}>
-            <Button size="small" icon={<KeyOutlined />} />
-          </Popconfirm></Tooltip>
-          <Tooltip title={r.role === 'admin' ? '切换状态' : r.team_id ? '启用/禁用' : '启用/禁用'}>
-            <Button size="small" icon={r.role === 'admin' ? <CheckCircleOutlined /> : <StopOutlined />}
-              onClick={() => toggleMutation.mutate(r.id)} />
-          </Tooltip>
           {r.role !== 'admin' && (
             <Popconfirm title="确定删除此用户？" onConfirm={() => deleteMutation.mutate(r.id)}>
               <Tooltip title="删除"><Button size="small" danger icon={<DeleteOutlined />} /></Tooltip>

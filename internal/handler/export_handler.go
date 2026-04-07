@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/awd-platform/awd-arena/internal/database"
@@ -34,7 +35,8 @@ func (h *exportHandler) ExportRankingCSV(c fiber.Ctx) error {
 
 	var roundScores []model.RoundScore
 	if err := db.Where("game_id = ?", gameID).Order("rank asc").Find(&roundScores).Error; err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		log.Printf("failed to export ranking csv: %v", err)
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "failed to export ranking data"})
 	}
 
 	teamMap := make(map[int64]string)
@@ -59,7 +61,8 @@ func (h *exportHandler) ExportRankingCSV(c fiber.Ctx) error {
 	}
 	writer.Flush()
 	if err := writer.Error(); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		log.Printf("failed to write ranking csv: %v", err)
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "failed to export ranking data"})
 	}
 
 	c.Set("Content-Type", "text/csv; charset=utf-8")
@@ -78,7 +81,8 @@ func (h *exportHandler) ExportRankingPDF(c fiber.Ctx) error {
 
 	var roundScores []model.RoundScore
 	if err := db.Where("game_id = ?", gameID).Order("rank asc").Find(&roundScores).Error; err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		log.Printf("failed to export ranking pdf: %v", err)
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "failed to export ranking data"})
 	}
 
 	teamMap := make(map[int64]string)
@@ -144,7 +148,8 @@ func (h *exportHandler) ExportAttackLog(c fiber.Ctx) error {
 	}
 	writer.Flush()
 	if err := writer.Error(); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		log.Printf("failed to write attack log csv: %v", err)
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "failed to export attack log"})
 	}
 
 	c.Set("Content-Type", "text/csv; charset=utf-8")

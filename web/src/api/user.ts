@@ -17,15 +17,18 @@ export interface UpdateUserRequest {
 
 export const userApi = {
   list: async (params?: { page?: number; page_size?: number; role?: string; search?: string }) => {
-    const users = await get<User[]>('/admin/users', params as any)
-    // 转换为前端期望的分页格式
-    return { items: users, total: users.length }
+    const res = await get<any>('/admin/users', params as any)
+    // Backend returns { users: User[], pagination: { total, page, page_size, total_pages } }
+    if (Array.isArray(res)) {
+      return { items: res, total: res.length }
+    }
+    const users: User[] = res.users || res.items || []
+    const total: number = res.pagination?.total ?? res.total ?? users.length
+    return { items: users, total }
   },
   get: (id: number) => get<User>(`/admin/users/${id}`),
   create: (data: CreateUserRequest) => post<User>('/admin/users', data),
   update: (id: number, data: UpdateUserRequest) => put<User>(`/admin/users/${id}`, data),
   delete: (id: number) => del<void>(`/admin/users/${id}`),
-  resetPassword: (id: number) => post<void>(`/admin/users/${id}/reset-password`),
-  toggleStatus: (id: number) => post<void>(`/admin/users/${id}/toggle-status`),
 }
 

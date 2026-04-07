@@ -100,6 +100,18 @@ func (e *CompetitionEngine) Pause() error {
 	}
 	e.running = false
 	e.currentPhase = "break"
+
+	// Persist paused status to database
+	db := database.GetDB()
+	if db != nil {
+		if err := db.Model(&model.Game{}).Where("id = ?", e.game.ID).Updates(map[string]interface{}{
+			"status":        model.GameStatusPaused,
+			"current_phase": "break",
+		}).Error; err != nil {
+			logger.Error("failed to persist paused status to database", "game_id", e.game.ID, "error", err)
+		}
+	}
+
 	logger.Info("competition engine paused", "round", e.currentRound)
 	return nil
 }
@@ -131,6 +143,17 @@ func (e *CompetitionEngine) Resume(ctx context.Context) error {
 	// Resume health checker
 	e.healthChecker = NewHealthChecker(e.game.ID, e.dockerClient)
 	e.healthChecker.Start(ctx)
+
+	// Persist resumed status to database
+	db := database.GetDB()
+	if db != nil {
+		if err := db.Model(&model.Game{}).Where("id = ?", e.game.ID).Updates(map[string]interface{}{
+			"status":        model.GameStatusRunning,
+			"current_phase": "running",
+		}).Error; err != nil {
+			logger.Error("failed to persist resumed status to database", "game_id", e.game.ID, "error", err)
+		}
+	}
 
 	logger.Info("competition engine resumed", "round", e.currentRound)
 	return nil

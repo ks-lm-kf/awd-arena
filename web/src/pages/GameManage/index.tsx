@@ -75,7 +75,7 @@ export default function GameManage() {
       title: '操作', width: 260,
       render: (_, r) => (
         <Space size="small" wrap>
-          <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/games/${r.id}`)}>详情</Button>
+          <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/admin/games/${r.id}`)}>详情</Button>
           {r.status === 'draft' && <Button size="small" icon={<EditOutlined />} onClick={() => { setEditing(r); form.setFieldsValue(r); setModalOpen(true) }}>编辑</Button>}
           {r.status === 'draft' && (
             <Popconfirm title="确定开始比赛？" description="比赛开始后将自动创建容器" onConfirm={() => actionMutation.mutate({ action: '开始', id: r.id })}>

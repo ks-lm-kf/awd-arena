@@ -119,7 +119,7 @@ func (n *NetworkManager) IsolateTeams(ctx context.Context, teamIDs []int64) erro
 	}
 	var subnets []teamSubnet
 	for _, tid := range teamIDs {
-		sn := fmt.Sprintf("%s.%d.0/24", n.ipBase, (tid%254)+1)
+		sn := fmt.Sprintf("%s.%d.0/24", n.ipBase, tid%256)
 		subnets = append(subnets, teamSubnet{teamID: tid, subnet: sn})
 	}
 
@@ -170,7 +170,7 @@ func (n *NetworkManager) Cleanup(ctx context.Context) error {
 
 func (n *NetworkManager) removeIsolationRulesLocked() {
 	for tid := range n.teamNets {
-		sn := fmt.Sprintf("%s.%d.0/24", n.ipBase, (tid%254)+1)
+		sn := fmt.Sprintf("%s.%d.0/24", n.ipBase, tid%256)
 		args := []string{"-D", "FORWARD", "-s", sn, "-j", "DROP"}
 		_ = exec.Command("iptables", args...).Run()
 	}

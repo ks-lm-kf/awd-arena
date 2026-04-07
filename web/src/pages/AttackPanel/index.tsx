@@ -16,7 +16,6 @@ export default function AttackPanelPage() {
   const [games, setGames] = useState<Game[]>([])
   const [selectedGame, setSelectedGame] = useState<number | null>(null)
   const [flagInput, setFlagInput] = useState('')
-  const [targetTeamId, setTargetTeamId] = useState<number>(0)
   const [submitting, setSubmitting] = useState(false)
   const [machines, setMachines] = useState<TeamContainer[]>([])
   const [machinesLoading, setMachinesLoading] = useState(false)

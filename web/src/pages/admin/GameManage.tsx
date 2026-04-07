@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Card, Table, Button, Tag, Space, Modal, Form, Input, Select, InputNumber, Typography, message, Popconfirm, Tooltip, Spin } from 'antd'
-import { PlusOutlined, PlayCircleOutlined, PauseCircleOutlined, StopOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, HistoryOutlined, EyeOutlined, TeamOutlined } from '@ant-design/icons'
+import { PlusOutlined, PlayCircleOutlined, PauseCircleOutlined, StopOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, HistoryOutlined, EyeOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { ColumnsType } from 'antd/es/table'
 import type { Game, GameStatus, GameMode } from '@/types'

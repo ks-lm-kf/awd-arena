@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"strconv"
 
 	"github.com/awd-platform/awd-arena/internal/model"
@@ -28,7 +29,8 @@ func (h *DockerImageHandler) List(c fiber.Ctx) error {
 
 	result, err := h.svc.ListDockerImages(c.Context(), page, pageSize, category, difficulty, search)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		log.Printf("failed to list docker images: %v", err)
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "failed to list docker images"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": result})
 }
@@ -56,7 +58,8 @@ func (h *DockerImageHandler) Create(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "name is required"})
 	}
 	if err := h.svc.CreateDockerImage(c.Context(), &img); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		log.Printf("failed to create docker image: %v", err)
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "failed to create docker image"})
 	}
 	return c.Status(201).JSON(fiber.Map{"code": 0, "message": "ok", "data": img})
 }
@@ -72,7 +75,8 @@ func (h *DockerImageHandler) Update(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "invalid request body"})
 	}
 	if err := h.svc.UpdateDockerImage(c.Context(), uint(id), &img); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		log.Printf("failed to update docker image: %v", err)
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "failed to update docker image"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok"})
 }
@@ -84,7 +88,8 @@ func (h *DockerImageHandler) Delete(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "invalid id"})
 	}
 	if err := h.svc.DeleteDockerImage(c.Context(), uint(id)); err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		log.Printf("failed to delete docker image: %v", err)
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "failed to delete docker image"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok"})
 }
@@ -101,7 +106,8 @@ func (h *DockerImageHandler) Pull(c fiber.Ctx) error {
 	}
 	output, err := h.svc.ImportDockerImage(c.Context(), img.Name, img.Tag)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		log.Printf("failed to import docker image: %v", err)
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "failed to import docker image"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": fiber.Map{"output": output}})
 }
@@ -110,7 +116,8 @@ func (h *DockerImageHandler) Pull(c fiber.Ctx) error {
 func (h *DockerImageHandler) HostList(c fiber.Ctx) error {
 	images, err := h.svc.ListDockerImagesFromHost(c.Context())
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"code": 500, "message": err.Error()})
+		log.Printf("failed to list host docker images: %v", err)
+		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "failed to list host docker images"})
 	}
 	return c.JSON(fiber.Map{"code": 0, "message": "ok", "data": images})
 }

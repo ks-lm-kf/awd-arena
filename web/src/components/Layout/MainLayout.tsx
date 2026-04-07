@@ -1,18 +1,18 @@
-import { useState, useEffect, type ReactNode } from 'react'
+import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { Outlet } from 'react-router'
 import Sidebar from './Sidebar'
 
 export default function MainLayout() {
   const [collapsed, setCollapsed] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const collapsedRef = useRef(collapsed)
+  collapsedRef.current = collapsed
 
-  // Detect mobile screen
   useEffect(() => {
     const checkMobile = () => {
       const mobile = window.innerWidth < 768
       setIsMobile(mobile)
-      // Auto-collapse on mobile
-      if (mobile && !collapsed) {
+      if (mobile && !collapsedRef.current) {
         setCollapsed(true)
       }
     }
@@ -20,7 +20,7 @@ export default function MainLayout() {
     checkMobile()
     window.addEventListener('resize', checkMobile)
     return () => window.removeEventListener('resize', checkMobile)
-  }, [collapsed])
+  }, [])
 
   return (
     <div className="flex h-screen overflow-hidden">
