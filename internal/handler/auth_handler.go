@@ -379,6 +379,13 @@ func (h *gameHandler) Create(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 	}
 
+	// Check for duplicate game title
+	var existingCount int64
+	database.GetDB().Model(&model.Game{}).Where("title = ?", sanitizedTitle).Count(&existingCount)
+	if existingCount > 0 {
+		return c.Status(409).JSON(fiber.Map{"code": 409, "message": "game with this title already exists"})
+	}
+
 	// XSS Protection: Sanitize description
 	var sanitizedDesc string
 	if req.Description != "" {
@@ -851,6 +858,12 @@ func (h *containerHandler) Restart(c fiber.Ctx) error {
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
 	}
+	db := database.GetDB()
+	var tc model.TeamContainer
+	if err := db.Where("id = ? AND game_id = ?", cid, id).First(&tc).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "container not found"})
+	}
+
 	if err := h.svc.RestartContainer(c.Context(), id, cid, operatorID); err != nil {
 		return c.Status(500).JSON(fiber.Map{"code": 500, "message": "internal server error"})
 	}
@@ -1044,6 +1057,10 @@ func (h *challengeHandler) Delete(c fiber.Ctx) error {
 	challengeID, err := parseID(c.Params("challengeId"))
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": err.Error()})
+	}
+
+	if _, err := h.svc.GetChallenge(c.Context(), challengeID); err != nil {
+		return c.Status(404).JSON(fiber.Map{"code": 404, "message": "challenge not found"})
 	}
 
 	if err := h.svc.DeleteChallenge(c.Context(), challengeID); err != nil {

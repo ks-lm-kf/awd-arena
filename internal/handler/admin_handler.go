@@ -126,9 +126,16 @@ func (h *adminHandler) CreateGame(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"code": 400, "message": "title must be at least 2 characters"})
 	}
 
+	sanitizedTitle := html.EscapeString(req.Title)
+	var existingCount int64
+	database.GetDB().Model(&model.Game{}).Where("title = ?", sanitizedTitle).Count(&existingCount)
+	if existingCount > 0 {
+		return c.Status(409).JSON(fiber.Map{"code": 409, "message": "game with this title already exists"})
+	}
+
 	userID, _ := c.Locals("user_id").(int64)
 	game := &model.Game{
-		Title:         html.EscapeString(req.Title),
+		Title:         sanitizedTitle,
 		Description:   html.EscapeString(req.Description),
 		Mode:          req.Mode,
 		Status:        "draft",

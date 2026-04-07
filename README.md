@@ -217,6 +217,8 @@ tail -f log/server.log
 | POST | `/api/v1/games/:id/stop` | 停止 |
 | POST | `/api/v1/games/:id/reset` | 重置 |
 
+> **Note**: `round_duration` and `break_duration` are integer values in **seconds** (e.g., use `300` for 5 minutes, not `"5m"`).
+
 ### 题目
 
 | 方法 | 路径 | 说明 |

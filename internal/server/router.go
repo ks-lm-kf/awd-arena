@@ -20,7 +20,7 @@ func RegisterRoutes(app *fiber.App) {
 	auth.Post("/logout", middleware.JWTAuth(), handler.AuthHandler.Logout)
 	auth.Get("/me", middleware.JWTAuth(), handler.AuthHandler.Me)
 	auth.Post("/register", middleware.LoginRateLimit(), handler.AuthHandler.Register)
-	auth.Post("/refresh", middleware.JWTAuth(), handler.AuthHandler.RefreshToken)
+	auth.Post("/refresh", middleware.JWTAuthForRefresh(), handler.AuthHandler.RefreshToken)
 
 	// Password change
 	auth.Put("/change-password", middleware.JWTAuth(), handler.AuthHandler.ChangePassword)

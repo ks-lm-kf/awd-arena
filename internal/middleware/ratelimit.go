@@ -49,7 +49,7 @@ func (rl *MultiKeyRateLimiter) Allow(key string) bool {
 	now := time.Now()
 	cutoff := now.Add(-rl.window)
 	times := rl.requests[key]
-	filtered := times[:0]
+	filtered := make([]time.Time, 0, len(times))
 	for _, t := range times {
 		if t.After(cutoff) {
 			filtered = append(filtered, t)
@@ -58,10 +58,6 @@ func (rl *MultiKeyRateLimiter) Allow(key string) bool {
 	if len(filtered) >= rl.limit {
 		rl.requests[key] = filtered
 		return false
-	}
-	if len(filtered) == 0 {
-		delete(rl.requests, key)
-		return true
 	}
 	filtered = append(filtered, now)
 	rl.requests[key] = filtered

@@ -108,6 +108,49 @@ func JWTAuth() fiber.Handler {
 	}
 }
 
+func JWTAuthForRefresh() fiber.Handler {
+	return func(c fiber.Ctx) error {
+		authHeader := c.Get("Authorization")
+		if authHeader == "" {
+			return c.Status(401).JSON(fiber.Map{"code": 401, "message": "missing authorization header"})
+		}
+
+		tokenString := authHeader
+		if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+			tokenString = authHeader[7:]
+		}
+
+		if isTokenBlacklisted(tokenString) {
+			return c.Status(401).JSON(fiber.Map{"code": 401, "message": "token has been revoked"})
+		}
+
+		secret := getJWTSecret()
+		// Use leeway to allow expired tokens for refresh
+		token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(t *jwt.Token) (interface{}, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+			}
+			return []byte(secret), nil
+		}, jwt.WithLeeway(24*time.Hour))
+
+		if err != nil || !token.Valid {
+			logger.Warn("JWT refresh validation failed", "error", err)
+			return c.Status(401).JSON(fiber.Map{"code": 401, "message": "invalid token"})
+		}
+
+		claims, ok := token.Claims.(*Claims)
+		if !ok {
+			return c.Status(401).JSON(fiber.Map{"code": 401, "message": "invalid token claims"})
+		}
+
+		c.Locals("user_id", claims.UserID)
+		c.Locals("username", claims.Username)
+		c.Locals("role", claims.Role)
+		c.Locals("team_id", claims.TeamID)
+		return c.Next()
+	}
+}
+
 func AdminOnly() fiber.Handler {
 	return func(c fiber.Ctx) error {
 		role, _ := c.Locals("role").(string)
@@ -150,6 +193,7 @@ func EnforcePasswordChange() fiber.Handler {
 				return c.Status(403).JSON(fiber.Map{
 					"code":    403,
 					"message": "password change required before accessing this resource",
+					"action":  "call PUT /api/v1/auth/change-password with old_password and new_password",
 				})
 			}
 		}

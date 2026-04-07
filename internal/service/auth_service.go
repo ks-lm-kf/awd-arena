@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/awd-platform/awd-arena/internal/database"
@@ -403,6 +404,17 @@ func validatePasswordStrength(password, username string) error {
 	}
 	if !hasDigit {
 		return errors.New("password must contain at least one digit")
+	}
+
+	var hasSpecial bool
+	for _, char := range password {
+		if strings.ContainsAny(string(char), "!@#$%^&*()_+-=[]{}|;:',.<>?/`~\"\\") {
+			hasSpecial = true
+			break
+		}
+	}
+	if !hasSpecial {
+		return errors.New("password must contain at least one special character")
 	}
 
 	return nil
