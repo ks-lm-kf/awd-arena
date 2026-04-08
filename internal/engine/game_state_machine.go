@@ -248,10 +248,10 @@ func (gsm *GameStateMachine) updateModelState() {
 		gsm.game.Status = "draft"
 		gsm.game.CurrentPhase = "preparation"
 	case StateRunning:
-		gsm.game.Status = "running"
+		gsm.game.Status = "active"
 		gsm.game.CurrentPhase = "running"
 	case StatePaused:
-		gsm.game.Status = "paused"
+		gsm.game.Status = "active"
 		gsm.game.CurrentPhase = "break"
 	case StateFinished:
 		gsm.game.Status = "finished"
@@ -290,18 +290,20 @@ func (gsm *GameStateMachine) persistState(ctx context.Context) error {
 
 // mapModelToGameState converts model fields to GameState
 func mapModelToGameState(status, currentPhase string) GameState {
-	// Check status first
 	switch status {
 	case "finished":
 		return StateFinished
-	case "running":
-		return StateRunning
-	case "paused":
-		return StatePaused
+	case "active":
+		// Active games use currentPhase to distinguish running vs paused
+		switch currentPhase {
+		case "break":
+			return StatePaused
+		default:
+			return StateRunning
+		}
 	case "draft":
 		return StatePreparing
 	default:
-		// Default to preparing
 		return StatePreparing
 	}
 }

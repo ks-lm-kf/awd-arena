@@ -478,6 +478,12 @@ sqlite3 data/awd.db "UPDATE users SET password='$(go run pkg/crypto/main.go NewP
 
 ## 更新日志
 
+### 2026-04 — 比赛状态机修复
+
+**Bug 修复：**
+- 修复 `mapModelToGameState` 未处理 `status="active"` 导致运行中/暂停的比赛恢复后状态回退为 preparing
+- 修复 `updateModelState` 将 Running/Paused 状态错误映射为 `status="running"`/`"paused"`，应为 `"active"` + `currentPhase` 区分
+
 ### 2026-04 — 全面安全审计 & Bug 修复
 
 修复 GitHub Issues #36–#82，共计 50+ 项问题：
