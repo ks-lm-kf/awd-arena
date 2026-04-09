@@ -2,19 +2,28 @@ package engine
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/awd-platform/awd-arena/internal/database"
+	"github.com/awd-platform/awd-arena/internal/engine/scoring"
 	"github.com/awd-platform/awd-arena/internal/model"
 	"github.com/awd-platform/awd-arena/pkg/logger"
 )
 
+// Default first blood bonus multiplier (e.g., 1.5x attack score for first blood)
+const firstBloodBonusPoints = 50.0
+
 // ScoreCalculator handles round scoring.
 type ScoreCalculator struct {
-	game *model.Game
+	game               *model.Game
+	firstBloodDetector *scoring.FirstBloodDetector
 }
 
 func NewScoreCalculator(game *model.Game) *ScoreCalculator {
-	return &ScoreCalculator{game: game}
+	return &ScoreCalculator{
+		game:               game,
+		firstBloodDetector: scoring.NewFirstBloodDetector(),
+	}
 }
 
 func (sc *ScoreCalculator) CalculateRoundScores(ctx context.Context, round int) error {
@@ -50,9 +59,22 @@ func (sc *ScoreCalculator) CalculateRoundScores(ctx context.Context, round int) 
 	// Calculate attack scores per team
 	attackScores := make(map[int64]float64)
 	defenseLosses := make(map[int64]float64)
+	firstBloodBonus := make(map[int64]float64)
 	for _, sub := range subs {
 		attackScores[sub.AttackerTeam] += sub.PointsEarned
 		defenseLosses[sub.TargetTeam] += sub.PointsEarned
+
+		// Check for first blood: unique key per target team's flag
+		flagKey := fmt.Sprintf("game%d_target%d_flag%s", sc.game.ID, sub.TargetTeam, sub.FlagHash)
+		if sc.firstBloodDetector.CheckAndRecord(flagKey, sub.AttackerTeam, round) {
+			firstBloodBonus[sub.AttackerTeam] += firstBloodBonusPoints
+			logger.Info("first blood bonus awarded",
+				"game_id", sc.game.ID,
+				"round", round,
+				"attacker_team", sub.AttackerTeam,
+				"target_team", sub.TargetTeam,
+				"bonus", firstBloodBonusPoints)
+		}
 	}
 
 	attackWeight := sc.game.AttackWeight
@@ -62,9 +84,10 @@ func (sc *ScoreCalculator) CalculateRoundScores(ctx context.Context, round int) 
 	for _, team := range teams {
 		attack := attackScores[team.ID] * attackWeight
 		defense := defenseLosses[team.ID] * defenseWeight
-		total := attack - defense
+		bonus := firstBloodBonus[team.ID]
+		total := attack - defense + bonus
 
-		// Zero-sum: no floor — scores CAN go negative
+		// Zero-sum base with first blood bonus on top
 
 		roundScore := model.RoundScore{
 			GameID:       sc.game.ID,

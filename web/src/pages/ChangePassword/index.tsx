@@ -11,7 +11,7 @@ export default function ChangePasswordPage() {
 
   const handleSubmit = async (values: any) => {
     if (values.new_password !== values.confirm_password) {
-      message.error('Two passwords do not match')
+      message.error('两次输入的密码不一致')
       return
     }
 
@@ -21,13 +21,13 @@ export default function ChangePasswordPage() {
         old_password: values.old_password,
         new_password: values.new_password,
       })
-      message.success('Password changed successfully')
+      message.success('密码修改成功')
       localStorage.removeItem('token')
       localStorage.removeItem('user')
       useAuthStore.getState().logout()
       navigate('/login')
     } catch (error: any) {
-      message.error(error.response?.data?.message || 'Failed to change password')
+      message.error(error.response?.data?.message || '密码修改失败')
     } finally {
       setLoading(false)
     }
@@ -35,29 +35,29 @@ export default function ChangePasswordPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4">
-      <Card className="w-full max-w-md" title="Change Password">
-        <p className="mb-4 text-gray-400">First time login requires password change</p>
+      <Card className="w-full max-w-md" title="修改密码">
+        <p className="mb-4 text-gray-400">首次登录需要修改密码</p>
         <Form layout="vertical" onFinish={handleSubmit}>
-          <Form.Item label="Old Password" name="old_password" rules={[{ required: true }]}>
+          <Form.Item label="旧密码" name="old_password" rules={[{ required: true, message: '请输入旧密码' }]}>
             <Input.Password prefix={<LockOutlined />} size="large" />
           </Form.Item>
           <Form.Item 
-            label="New Password" 
+            label="新密码" 
             name="new_password" 
             rules={[
-              { required: true },
-              { min: 8, message: 'At least 8 characters' },
-              { pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/, message: 'Must contain uppercase, lowercase and number' }
+              { required: true, message: '请输入新密码' },
+              { min: 8, message: '密码至少8个字符' },
+              { pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{}|;:',.<>?/\\`~"]).+$/, message: '必须包含大小写字母、数字和特殊字符' }
             ]}
           >
             <Input.Password prefix={<LockOutlined />} size="large" />
           </Form.Item>
-          <Form.Item label="Confirm Password" name="confirm_password" rules={[{ required: true }]}>
+          <Form.Item label="确认密码" name="confirm_password" rules={[{ required: true, message: '请确认新密码' }]}>
             <Input.Password prefix={<LockOutlined />} size="large" />
           </Form.Item>
           <Form.Item>
             <Button type="primary" htmlType="submit" loading={loading} size="large" block>
-              Change Password
+              修改密码
             </Button>
           </Form.Item>
         </Form>
@@ -65,4 +65,3 @@ export default function ChangePasswordPage() {
     </div>
   )
 }
-
